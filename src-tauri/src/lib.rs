@@ -44,13 +44,17 @@ fn get_system_stats() -> SystemStats {
 fn get_hardware_profile() -> HardwareProfile {
     let mut sys = System::new_all();
     sys.refresh_all();
+    calculate_profile(sys.cpus().len(), sys.total_memory())
+}
+
+/// Pure logic for resource allocation (Separate for testing)
+fn calculate_profile(cpu_cores: usize, total_ram_bytes: u64) -> HardwareProfile {
+    let total_ram_gb = (total_ram_bytes / 1024 / 1024 / 1024) as usize;
     
-    let cpu_cores = sys.cpus().len();
-    let total_ram_gb = (sys.total_memory() / 1024 / 1024 / 1024) as usize;
-    
-    // Use 90% of resources
+    // Use 90% of cores
     let max_workers = ((cpu_cores as f64) * 0.9).floor() as usize;
-    let jvm_heap_gb = ((total_ram_gb as f64) * 0.5).floor() as usize; // 50% of RAM for JVM heap
+    // Use 50% of RAM for JVM
+    let jvm_heap_gb = ((total_ram_gb as f64) * 0.5).floor() as usize; 
     
     HardwareProfile {
         max_workers: max_workers.max(4),
@@ -260,3 +264,31 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_path_conversion() {
+        assert_eq!(windows_to_wsl_path("C:\\Users\\Game"), "/mnt/c/Users/Game");
+        assert_eq!(windows_to_wsl_path("D:/Projects/App"), "/mnt/d/Projects/App");
+        assert_eq!(windows_to_wsl_path("E:\\Work\\Dev"), "/mnt/e/Work/Dev");
+    }
+
+    #[test]
+    fn test_hardware_clamping() {
+        let gigabyte = 1024 * 1024 * 1024;
+
+        // Test high-end system (Clamped at 16GB)
+        let hw_high = calculate_profile(32, 256 * gigabyte);
+        assert_eq!(hw_high.jvm_heap_gb, 16); 
+        assert!(hw_high.max_workers >= 4);
+        
+        // Test low-spec system (Minimum 4GB)
+        let hw_low = calculate_profile(2, 4 * gigabyte);
+        assert_eq!(hw_low.jvm_heap_gb, 4); 
+        assert_eq!(hw_low.max_workers, 4); 
+    }
+}
+
