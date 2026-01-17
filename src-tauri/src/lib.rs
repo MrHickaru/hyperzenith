@@ -136,19 +136,22 @@ async fn execute_build(
 
 
     let wsl_cmd = if turbo_mode {
-        // V1.2 SPEED EDITION: Maximum optimization flags (no config-cache - incompatible with Expo)
+        // V1.2 SUPER-SONIC EDITION: Configuration Cache + Parallel GC + High Throughput
         format!(
             r#"export NODE_ENV=development && \
              export ANDROID_HOME={} && \
              export PATH=$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH && \
-             export GRADLE_OPTS="-Xmx{}g -XX:MaxMetaspaceSize=1g" && \
+             export GRADLE_OPTS="-Xmx{}g -XX:+UseParallelGC -XX:MaxMetaspaceSize=1g -Dorg.gradle.daemon.idletimeout=3600000" && \
              cd '{}/android' && chmod +x ./gradlew && \
              ./gradlew assembleDebug \
                --parallel \
                --build-cache \
+               --configuration-cache \
+               --configuration-cache-problems=warn \
                --max-workers={} \
                -Dorg.gradle.caching=true \
                -Dorg.gradle.parallel=true \
+               -Dorg.gradle.vfs.watch=true \
                -Dkotlin.incremental=true \
                -x lint -x test \
                2>&1"#,
