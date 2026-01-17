@@ -3,7 +3,7 @@ use std::process::{Command, Child, Stdio};
 use tauri::Emitter;
 use lazy_static::lazy_static;
 use chrono::Local;
-use sysinfo::System;
+// use sysinfo::System; // Removed unused import
 
 lazy_static! {
     static ref ACTIVE_BUILD_HANDLE: Mutex<Option<Child>> = Mutex::new(None);
@@ -129,9 +129,11 @@ async fn execute_build(
     
     let wsl_path = windows_to_wsl_path(&working_dir);
 
-    // Get LOCALAPPDATA for dynamic Android SDK path
+    // Get LOCALAPPDATA for dynamic Android SDK path (Failsafe included)
     let local_app_data = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| "C:/Users/Default/AppData/Local".to_string());
-    let android_sdk_path = local_app_data.replace("\\", "/") + "/Android/Sdk";
+    let win_sdk_path = format!("{}/Android/Sdk", local_app_data.replace("\\", "/"));
+    let android_sdk_path = windows_to_wsl_path(&win_sdk_path);
+
 
     let wsl_cmd = if turbo_mode {
         // V1.2 SPEED EDITION: Maximum optimization flags (no config-cache - incompatible with Expo)
