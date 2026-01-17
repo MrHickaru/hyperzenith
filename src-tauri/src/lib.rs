@@ -3,7 +3,6 @@ use std::process::{Command, Child, Stdio};
 use tauri::Emitter;
 use lazy_static::lazy_static;
 use chrono::Local;
-// use sysinfo::System; // Removed unused import
 
 lazy_static! {
     static ref ACTIVE_BUILD_HANDLE: Mutex<Option<Child>> = Mutex::new(None);
@@ -60,7 +59,7 @@ fn calculate_profile(cpu_cores: usize, total_ram_bytes: u64) -> HardwareProfile 
     
     HardwareProfile {
         max_workers: max_workers.max(4),
-        jvm_heap_gb: jvm_heap_gb.max(4).min(16), // Clamp between 4-16GB
+        jvm_heap_gb: jvm_heap_gb.clamp(4, 16),
         cpu_cores,
         total_ram_gb,
     }
@@ -79,7 +78,7 @@ fn abort_build() -> Result<String, String> {
 
 #[tauri::command]
 fn purge_wsl() -> Result<String, String> {
-    Command::new("wsl").args(&["--shutdown"]).output()
+    Command::new("wsl").args(["--shutdown"]).output()
         .map_err(|e| format!("Failed: {}", e))?;
     Ok("WSL Purged".to_string())
 }
@@ -103,7 +102,7 @@ fn prewarm_engine(working_dir: String) -> Result<String, String> {
     std::thread::spawn(move || {
         println!("🔥 [SYSTEM] PRE-WARMING GRADLE DAEMON...");
         if let Ok(mut child) = Command::new("wsl")
-            .args(&["-e", "bash", "-c", &format!("cd '{}/android' && ./gradlew --version", wsl_path)])
+            .args(["-e", "bash", "-c", &format!("cd '{}/android' && ./gradlew --version", wsl_path)])
             .stdout(Stdio::null()).stderr(Stdio::null()).spawn() 
         {
             let _ = child.wait();
@@ -172,7 +171,7 @@ async fn execute_build(
     }
 
     let mut child = Command::new("wsl")
-        .args(&["-e", "bash", "-c", &wsl_cmd])
+        .args(["-e", "bash", "-c", &wsl_cmd])
         .current_dir(&working_dir)
         .stdout(Stdio::piped()).stderr(Stdio::piped())
         .spawn().map_err(|e| e.to_string())?;
@@ -184,7 +183,7 @@ async fn execute_build(
     let app1 = app.clone();
     let buf1 = Arc::clone(&log_buffer);
     let t1 = std::thread::spawn(move || {
-        for line in BufReader::new(stdout).lines().flatten() {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
             let _ = app1.emit("build-output", &line);
             buf1.lock().unwrap().push_str(&format!("{}\n", line));
         }
@@ -193,7 +192,7 @@ async fn execute_build(
     let app2 = app.clone();
     let buf2 = Arc::clone(&log_buffer);
     let t2 = std::thread::spawn(move || {
-        for line in BufReader::new(stderr).lines().flatten() {
+        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
             let _ = app2.emit("build-output", &line);
             buf2.lock().unwrap().push_str(&format!("{}\n", line));
         }

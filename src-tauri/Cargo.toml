@@ -1,6 +1,6 @@
 [package]
 name = "hyperzenith"
-version = "1.2.0"
+version = "1.3.0"
 description = "High-performance Android build orchestrator for Expo/React Native"
 authors = ["MrHickaru"]
 edition = "2021"
