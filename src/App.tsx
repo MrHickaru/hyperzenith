@@ -27,7 +27,7 @@ export default function App() {
   const [engineStatus, setEngineStatus] = useState("Select Project");
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [hardware, setHardware] = useState<HardwareProfile | null>(null);
-  const [logs, setLogs] = useState<string[]>(["🚀 HyperZenith V1.3.5"]);
+  const [logs, setLogs] = useState<string[]>(["🚀 HyperZenith V1.3.6"]);
   const [buildProgress, setBuildProgress] = useState(0);
   const [buildStartTime, setBuildStartTime] = useState<number | null>(null);
   const [showMaintenance, setShowMaintenance] = useState(false);
@@ -180,6 +180,15 @@ export default function App() {
     localStorage.setItem('hyperzenith_archive_path', newPath);
   };
 
+  const handleOpenLogs = async () => {
+    try {
+      await invoke("open_logs_folder", { workingDir: projectPath });
+      addLog("📂 Opening logs folder...");
+    } catch (err) {
+      addLog(`❌ ${err}`);
+    }
+  };
+
   const memPercent = stats ? Math.round((stats.used_memory / stats.total_memory) * 100) : 0;
   const avgCpu = stats ? Math.round(stats.cpu_usage.reduce((a, b) => a + b, 0) / stats.cpu_usage.length) : 0;
 
@@ -191,7 +200,7 @@ export default function App() {
           <h1 className="text-lg font-black tracking-tight">
             HYPER<span className="text-cyan-400">ZENITH</span>
           </h1>
-          <span className="text-[9px] font-medium px-1.5 py-0.5 bg-cyan-500/20 text-cyan-400 rounded">V1.3.5</span>
+          <span className="text-[9px] font-medium px-1.5 py-0.5 bg-cyan-500/20 text-cyan-400 rounded">V1.3.6</span>
         </div>
         <div className="flex items-center gap-5 text-[11px]">
           {hardware && (
@@ -387,6 +396,9 @@ export default function App() {
                 </button>
                 <button onClick={handlePurge} className="w-full py-1.5 text-[9px] font-semibold uppercase bg-orange-900/30 text-orange-400 rounded hover:bg-orange-900/50 transition-colors">
                   🔥 Purge WSL
+                </button>
+                <button onClick={handleOpenLogs} className="w-full py-1.5 text-[9px] font-semibold uppercase bg-slate-700/50 text-slate-400 rounded hover:bg-slate-600/50 transition-colors">
+                  📂 Open Logs Folder
                 </button>
                 <div className="mt-2 pt-2 border-t border-slate-700">
                   <label className="text-[8px] text-slate-500 block mb-1">Custom APK Output Path:</label>

@@ -231,6 +231,7 @@ async fn execute_build(
             
             match std::fs::copy(&apk_source, &dest_path) {
                 Ok(_) => {
+                    let _ = app.emit("build-output", format!("📂 Saved to: {}", dest_path.display()));
                     if is_fresh {
                         let _ = app.emit("build-output", "📦 New APK archived!");
                     } else {
@@ -313,6 +314,20 @@ fn open_build_archive(working_dir: String, custom_path: Option<String>) -> Resul
     } else {
         Err("Archive folder missing. Run a build first!".to_string())
     }
+}
+
+#[tauri::command]
+fn open_logs_folder(working_dir: String) -> Result<String, String> {
+    let logs_dir = std::path::Path::new(&working_dir).join("hyperzenith_logs");
+    let _ = std::fs::create_dir_all(&logs_dir);
+    
+    println!("📂 [SYSTEM] Opening logs: {}", logs_dir.display());
+
+    Command::new("explorer")
+        .arg(logs_dir.to_str().unwrap())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok("Opened Logs".to_string())
 }
 
 #[tauri::command]
@@ -440,6 +455,7 @@ pub fn run() {
             prewarm_engine,
             nuke_build,
             open_build_archive,
+            open_logs_folder,
             clear_archive,
             scan_for_projects
         ])

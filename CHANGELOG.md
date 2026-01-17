@@ -2,6 +2,14 @@
 
 All notable changes to HyperZenith are documented here.
 
+## [1.3.6] - 2026-01-17
+
+### Added
+- **Open Logs Folder**: New button in Maintenance menu to access diagnostic logs.
+- **APK Path Display**: Console now shows the exact path where APK was saved after successful build.
+
+---
+
 ## [1.3.5] - 2026-01-17
 
 ### Added
