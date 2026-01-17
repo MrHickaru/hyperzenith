@@ -3,23 +3,38 @@
 
 A sleek Tauri + React desktop app that supercharges your local Android builds by automatically detecting your hardware and configuring Gradle for maximum parallelism.
 
-![Version](https://img.shields.io/badge/version-1.2-cyan)
+![Version](https://img.shields.io/badge/version-1.3.5-cyan)
 ![Platform](https://img.shields.io/badge/platform-Windows-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
+## 🖥️ Screenshot
+
+![HyperZenith UI](screenshot.png)
+
 ## ✨ Features
 
+### Build Performance
 - **Auto-Detect Hardware** – Detects CPU cores & RAM, allocates ~90% for builds
 - **Turbo Mode** – One-click optimized Gradle flags (`--parallel`, `--build-cache`, `-Dkotlin.incremental=true`)
 - **Live Build Timer** – Real-time MM:SS elapsed time tracking
-- **Diagnostic Logging** – Timestamped failure logs in `hyperzenith_logs/`
-- **Instant APK Access** – "Open APK Folder" button after successful builds
+- **Fresh vs Cached Detection** – Know instantly if your APK was rebuilt or reused
+
+### APK Management
+- **Managed APK Archive** – All builds saved to `hyperzenith_builds/` with timestamps
+- **Custom Output Path** – Set your own APK destination folder (persisted across sessions)
+- **Open APK Folder** – One-click access to your archived builds
+- **Clear Archive** – Quickly delete old APKs
+
+### Maintenance Tools
+- **Nuke Gradle Cache** – Force-clear corrupted build directories (`android/app/build`, `.gradle`)
 - **WSL Purge** – Instantly reclaim memory from `VmmemWSL`
-- **Nuke Build** – Force-clear corrupted build directories
+- **Diagnostic Logging** – Timestamped failure logs in `hyperzenith_logs/`
 
-## 🖥️ Screenshots
-
-<!-- Add screenshots here -->
+### UI/UX
+- **Sleek Cyberpunk Design** – Dark theme with neon accents
+- **Live CPU/RAM Stats** – Real-time system monitoring
+- **Project Auto-Detection** – Scans common directories for React Native/Expo projects
+- **Turbo Toggle** – Precise, tactile toggle switch
 
 ## 🚀 Getting Started
 
@@ -57,6 +72,7 @@ When you click **IGNITE BUILD**, HyperZenith runs this optimized Gradle command 
   --max-workers=18 \
   -Dorg.gradle.caching=true \
   -Dorg.gradle.parallel=true \
+  -Dorg.gradle.vfs.watch=true \
   -Dkotlin.incremental=true \
   -x lint -x test
 ```

@@ -2,6 +2,24 @@
 
 All notable changes to HyperZenith are documented here.
 
+## [1.3.5] - 2026-01-17
+
+### Added
+- **Custom APK Output Path**: Set your own destination folder with browse button (persisted in localStorage).
+- **Clear APK Archive**: New button to delete all APKs from your archive folder.
+- **Fresh vs Cached Detection**: Console now shows if APK was freshly built or reused from cache.
+
+### Changed
+- **Nuke Build** renamed to **Nuke Gradle Cache** for clarity.
+- Build, Open, and Clear all now respect custom path setting.
+- Sidebar now scrollable (fixes hidden Maintenance menu on small screens).
+
+### Fixed
+- APK archiving now correctly saves to custom path.
+- Clear Archive displays detailed debug logs for troubleshooting.
+
+---
+
 ## [1.3.0] - 2026-01-17
 
 ### Added

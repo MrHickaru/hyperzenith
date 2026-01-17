@@ -117,7 +117,8 @@ async fn execute_build(
     app: tauri::AppHandle,
     working_dir: String, 
     _build_type: String,
-    turbo_mode: bool
+    turbo_mode: bool,
+    custom_path: Option<String>
 ) -> Result<String, String> {
     use std::io::{BufRead, BufReader};
     
@@ -201,22 +202,52 @@ async fn execute_build(
     t1.join().ok(); t2.join().ok();
     let status = child.wait().map_err(|e| e.to_string())?;
 
-    if status.success() {
+        if status.success() {
         // Archive the APK with timestamp
         let apk_source = std::path::Path::new(&working_dir)
             .join("android/app/build/outputs/apk/debug/app-debug.apk");
-        let builds_dir = std::path::Path::new(&working_dir).join("hyperzenith_builds");
+        
+        let builds_dir = match custom_path {
+            Some(p) if !p.is_empty() => std::path::PathBuf::from(p),
+            _ => std::path::Path::new(&working_dir).join("hyperzenith_builds"),
+        };
+        
         let _ = std::fs::create_dir_all(&builds_dir);
         
         if apk_source.exists() {
+            // Check if APK is fresh or cached by looking at modification time
+            let apk_modified = apk_source.metadata()
+                .and_then(|m| m.modified())
+                .ok();
+            
+            let is_fresh = apk_modified.map(|m| {
+                let age = std::time::SystemTime::now().duration_since(m).unwrap_or_default();
+                age.as_secs() < 120 // APK modified within last 2 minutes = fresh
+            }).unwrap_or(false);
+            
             let timestamp = Local::now().format("%Y-%m-%d_%H-%M-%S");
             let dest_name = format!("app-debug_{}.apk", timestamp);
             let dest_path = builds_dir.join(&dest_name);
-            let _ = std::fs::copy(&apk_source, &dest_path);
-            println!("📦 [ARCHIVE] APK saved to: {}", dest_path.display());
+            
+            match std::fs::copy(&apk_source, &dest_path) {
+                Ok(_) => {
+                    if is_fresh {
+                        let _ = app.emit("build-output", "📦 New APK archived!");
+                    } else {
+                        let _ = app.emit("build-output", "♻️ Cached APK (code unchanged)");
+                    }
+                },
+                Err(e) => println!("📦 [ARCHIVE] ❌ Copy failed: {}", e),
+            }
+            
+            if is_fresh {
+                Ok("Build completed! (Fresh APK)".to_string())
+            } else {
+                Ok("Build completed! (Cached - no code changes)".to_string())
+            }
+        } else {
+            Ok("Build completed!".to_string())
         }
-        
-        Ok("Build completed!".to_string())
     } else {
         let logs_dir = std::path::Path::new(&working_dir).join("hyperzenith_logs");
         let _ = std::fs::create_dir_all(&logs_dir);
@@ -228,29 +259,51 @@ async fn execute_build(
 
 #[tauri::command]
 fn nuke_build(working_dir: String) -> Result<String, String> {
+    println!("🧨 [NUKE] Target Working Dir: {}", working_dir);
     let android_dir = std::path::Path::new(&working_dir).join("android");
-    let build_dirs = [
+    let targets = vec![
         android_dir.join("app").join("build"),
         android_dir.join("build"),
         android_dir.join(".gradle"),
     ];
-
-    for dir in build_dirs.iter() {
+    
+    let mut report = String::from("Nuked: ");
+    let mut deleted_count = 0;
+    
+    for dir in targets {
         if dir.exists() {
             println!("🧨 NUKING: {}", dir.display());
-            let _ = std::fs::remove_dir_all(dir);
+            let name = dir.file_name().unwrap_or_default().to_string_lossy().to_string();
+            match std::fs::remove_dir_all(&dir) {
+                Ok(_) => {
+                    deleted_count += 1;
+                    report.push_str(&format!("{}, ", name));
+                },
+                Err(e) => {
+                    println!("❌ Failed to nuke {}: {}", dir.display(), e);
+                    report.push_str(&format!("(Fail: {}) ", name));
+                }
+            }
         }
     }
-    Ok("Build Nuked!".to_string())
+    
+    if deleted_count == 0 {
+        Ok("Nothing to nuke! (Clean)".to_string())
+    } else {
+        Ok(format!("{} ({} items)", report.trim_end_matches(", "), deleted_count))
+    }
 }
 
 #[tauri::command]
-fn open_output_folder(working_dir: String) -> Result<String, String> {
-    let builds_dir = std::path::Path::new(&working_dir).join("hyperzenith_builds");
+fn open_build_archive(working_dir: String, custom_path: Option<String>) -> Result<String, String> {
+    let builds_dir = match custom_path {
+        Some(p) if !p.is_empty() => std::path::PathBuf::from(p),
+        _ => std::path::Path::new(&working_dir).join("hyperzenith_builds"),
+    };
     
-    // Create dir if it doesn't exist (first-time users)
     let _ = std::fs::create_dir_all(&builds_dir);
-    
+    println!("📂 [SYSTEM] Opening archive: {}", builds_dir.display());
+
     if builds_dir.exists() {
         Command::new("explorer")
             .arg(builds_dir.to_str().unwrap())
@@ -258,7 +311,61 @@ fn open_output_folder(working_dir: String) -> Result<String, String> {
             .map_err(|e| e.to_string())?;
         Ok("Opened Archive".to_string())
     } else {
-        Err("Build folder not found. Run a build first!".to_string())
+        Err("Archive folder missing. Run a build first!".to_string())
+    }
+}
+
+#[tauri::command]
+fn clear_archive(working_dir: String, custom_path: Option<String>) -> Result<String, String> {
+    let builds_dir = match custom_path {
+        Some(p) if !p.is_empty() => std::path::PathBuf::from(p),
+        _ => std::path::Path::new(&working_dir).join("hyperzenith_builds"),
+    };
+    
+    println!("🗑️ [CLEAR] Target Dir: {}", builds_dir.display());
+    
+    if !builds_dir.exists() {
+        println!("🗑️ [CLEAR] ⚠️ Directory does not exist!");
+        return Ok("Archive folder doesn't exist.".to_string());
+    }
+    
+    let mut deleted = 0;
+    match std::fs::read_dir(&builds_dir) {
+        Ok(entries) => {
+            println!("🗑️ [CLEAR] Reading directory entries...");
+            for entry in entries.filter_map(|e| e.ok()) {
+                let path = entry.path();
+                println!("🗑️ [CLEAR] Found item: {}", path.display());
+                
+                if let Some(ext) = path.extension() {
+                    // Case-insensitive check
+                    if ext.to_string_lossy().to_lowercase() == "apk" {
+                        println!("🗑️ [CLEAR] >> Deleting APK...");
+                        match std::fs::remove_file(&path) {
+                            Ok(_) => { 
+                                println!("🗑️ [CLEAR] >> ✅ Deleted.");
+                                deleted += 1 
+                            },
+                            Err(e) => println!("🗑️ [CLEAR] >> ❌ Failed to delete: {}", e),
+                        }
+                    } else {
+                         println!("🗑️ [CLEAR] >> Skipping non-APK (ext: {:?})", ext);
+                    }
+                } else {
+                    println!("🗑️ [CLEAR] >> Skipping (no extension)");
+                }
+            }
+        },
+        Err(e) => {
+            println!("🗑️ [CLEAR] ❌ Failed to read directory: {}", e);
+            return Err(format!("Failed to read archive: {}", e));
+        }
+    }
+    
+    if deleted == 0 {
+        Ok("No APKs to clear.".to_string())
+    } else {
+        Ok(format!("Cleared {} APK(s)", deleted))
     }
 }
 
@@ -332,7 +439,8 @@ pub fn run() {
             purge_wsl,
             prewarm_engine,
             nuke_build,
-            open_output_folder,
+            open_build_archive,
+            clear_archive,
             scan_for_projects
         ])
         .run(tauri::generate_context!())

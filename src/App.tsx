@@ -27,12 +27,13 @@ export default function App() {
   const [engineStatus, setEngineStatus] = useState("Select Project");
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [hardware, setHardware] = useState<HardwareProfile | null>(null);
-  const [logs, setLogs] = useState<string[]>(["🚀 HyperZenith V1.2 Speed Edition"]);
+  const [logs, setLogs] = useState<string[]>(["🚀 HyperZenith V1.3.5"]);
   const [buildProgress, setBuildProgress] = useState(0);
   const [buildStartTime, setBuildStartTime] = useState<number | null>(null);
   const [showMaintenance, setShowMaintenance] = useState(false);
   const [scanResults, setScanResults] = useState<string[]>([]);
   const [showScanResults, setShowScanResults] = useState(false);
+  const [customArchivePath, setCustomArchivePath] = useState(() => localStorage.getItem('hyperzenith_archive_path') || '');
   const hasPrewarmed = useRef(false);
 
 
@@ -113,7 +114,7 @@ export default function App() {
     });
 
     try {
-      await invoke("execute_build", { workingDir: projectPath, buildType: "apk", turboMode });
+      await invoke("execute_build", { workingDir: projectPath, buildType: "apk", turboMode, customPath: customArchivePath || null });
       setBuildProgress(100);
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       addLog(`✅ BUILD COMPLETE in ${elapsed}s!`);
@@ -156,11 +157,27 @@ export default function App() {
 
   const handleOpenOutput = async () => {
     try {
-      await invoke("open_output_folder", { workingDir: projectPath });
+      await invoke("open_build_archive", { workingDir: projectPath, customPath: customArchivePath || null });
       addLog("📂 Opening APK folder...");
     } catch (err) {
       addLog(`❌ ${err}`);
     }
+  };
+
+  const handleClearArchive = async () => {
+    addLog("🗑️ Clearing APK archive...");
+    try {
+      const msg: string = await invoke("clear_archive", { workingDir: projectPath, customPath: customArchivePath || null });
+      addLog(`✅ ${msg}`);
+    } catch (err) {
+      addLog(`❌ ${err}`);
+    }
+    setShowMaintenance(false);
+  };
+
+  const handleArchivePathChange = (newPath: string) => {
+    setCustomArchivePath(newPath);
+    localStorage.setItem('hyperzenith_archive_path', newPath);
   };
 
   const memPercent = stats ? Math.round((stats.used_memory / stats.total_memory) * 100) : 0;
@@ -174,7 +191,7 @@ export default function App() {
           <h1 className="text-lg font-black tracking-tight">
             HYPER<span className="text-cyan-400">ZENITH</span>
           </h1>
-          <span className="text-[9px] font-medium px-1.5 py-0.5 bg-cyan-500/20 text-cyan-400 rounded">V1.2 SPEED</span>
+          <span className="text-[9px] font-medium px-1.5 py-0.5 bg-cyan-500/20 text-cyan-400 rounded">V1.3.5</span>
         </div>
         <div className="flex items-center gap-5 text-[11px]">
           {hardware && (
@@ -198,7 +215,7 @@ export default function App() {
       {/* Main */}
       <div className="flex-1 flex min-h-0">
         {/* Left Panel */}
-        <aside className="w-64 shrink-0 p-4 space-y-3 border-r border-slate-800/30 flex flex-col">
+        <aside className="w-64 shrink-0 p-4 space-y-3 border-r border-slate-800/30 flex flex-col overflow-y-auto">
           {/* Project */}
           <div>
             <label className="text-[9px] font-bold uppercase tracking-widest text-slate-600 block mb-1">Project</label>
@@ -269,19 +286,44 @@ export default function App() {
           </div>
 
           {/* Turbo Toggle */}
-          <div className={`p-3 rounded-lg border transition-colors ${turboMode ? 'bg-cyan-500/5 border-cyan-500/20' : 'bg-slate-900/50 border-slate-800'}`}>
+          <div className={`p-3 rounded-lg border transition-all duration-300 ${turboMode ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-900/40 border-slate-800'}`}>
             <div className="flex justify-between items-center">
               <div>
-                <div className="text-xs font-semibold">⚡ Turbo Mode</div>
-                <div className="text-[9px] text-slate-500 mt-0.5">
+                <div className={`text-xs font-bold tracking-wide transition-colors ${turboMode ? 'text-emerald-400' : 'text-slate-400'}`}>
+                  {turboMode ? '⚡ TURBO ACTIVE' : '🐢 TURBO OFF'}
+                </div>
+                <div className="text-[9px] text-slate-500 mt-0.5 font-medium">
                   {hardware ? `${hardware.max_workers} workers • ${hardware.jvm_heap_gb}GB heap` : 'Auto-detecting...'}
                 </div>
               </div>
               <button
                 onClick={() => setTurboMode(!turboMode)}
-                className={`w-10 h-5 rounded-full relative transition-all active:scale-95 ${turboMode ? 'bg-cyan-500' : 'bg-slate-700'}`}
+                style={{
+                  width: '32px',
+                  height: '16px',
+                  borderRadius: '8px',
+                  backgroundColor: turboMode ? '#10b981' : '#475569',
+                  position: 'relative',
+                  transition: 'all 0.3s',
+                  boxShadow: turboMode ? '0 0 8px rgba(16, 185, 129, 0.4)' : 'none',
+                  cursor: 'pointer',
+                  border: 'none',
+                  marginRight: '5px'
+                }}
               >
-                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all shadow-sm ${turboMode ? 'left-5' : 'left-0.5'}`} />
+                <div
+                  style={{
+                    width: '10px',
+                    height: '10px',
+                    borderRadius: '50%',
+                    backgroundColor: 'white',
+                    position: 'absolute',
+                    top: '3px',
+                    left: turboMode ? '19px' : '3px',
+                    transition: 'all 0.3s',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                  }}
+                />
               </button>
             </div>
           </div>
@@ -338,11 +380,35 @@ export default function App() {
             {showMaintenance && (
               <div className="absolute bottom-full left-0 right-0 mb-1 p-2 bg-slate-900 border border-slate-800 rounded-lg space-y-1">
                 <button onClick={handleNuke} className="w-full py-1.5 text-[9px] font-semibold uppercase bg-red-900/30 text-red-400 rounded hover:bg-red-900/50 transition-colors">
-                  🧨 Nuke Build
+                  🧨 Nuke Gradle Cache
+                </button>
+                <button onClick={handleClearArchive} className="w-full py-1.5 text-[9px] font-semibold uppercase bg-purple-900/30 text-purple-400 rounded hover:bg-purple-900/50 transition-colors">
+                  🗑️ Clear APK Archive
                 </button>
                 <button onClick={handlePurge} className="w-full py-1.5 text-[9px] font-semibold uppercase bg-orange-900/30 text-orange-400 rounded hover:bg-orange-900/50 transition-colors">
                   🔥 Purge WSL
                 </button>
+                <div className="mt-2 pt-2 border-t border-slate-700">
+                  <label className="text-[8px] text-slate-500 block mb-1">Custom APK Output Path:</label>
+                  <div className="flex gap-1">
+                    <input
+                      type="text"
+                      value={customArchivePath}
+                      onChange={(e) => handleArchivePathChange(e.target.value)}
+                      placeholder="Default: hyperzenith_builds/"
+                      className="flex-1 px-2 py-1 text-[9px] bg-slate-800 border border-slate-700 rounded text-slate-300 placeholder-slate-600"
+                    />
+                    <button
+                      onClick={async () => {
+                        const selected = await open({ directory: true, multiple: false });
+                        if (selected) handleArchivePathChange(selected as string);
+                      }}
+                      className="px-2 py-1 text-[9px] bg-slate-700 hover:bg-slate-600 rounded text-slate-300"
+                    >
+                      ...
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
