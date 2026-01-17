@@ -7,6 +7,7 @@ use sysinfo::System;
 
 lazy_static! {
     static ref ACTIVE_BUILD_HANDLE: Mutex<Option<Child>> = Mutex::new(None);
+    static ref SYSTEM_MONITOR: Mutex<sysinfo::System> = Mutex::new(sysinfo::System::new_all());
 }
 
 #[derive(serde::Serialize, Clone)]
@@ -28,8 +29,9 @@ pub struct HardwareProfile {
 
 #[tauri::command]
 fn get_system_stats() -> SystemStats {
-    let mut sys = System::new_all();
-    sys.refresh_all();
+    let mut sys = SYSTEM_MONITOR.lock().unwrap();
+    sys.refresh_cpu();
+    sys.refresh_memory();
     
     SystemStats {
         cpu_usage: sys.cpus().iter().map(|c| c.cpu_usage()).collect(),
@@ -42,8 +44,8 @@ fn get_system_stats() -> SystemStats {
 
 #[tauri::command]
 fn get_hardware_profile() -> HardwareProfile {
-    let mut sys = System::new_all();
-    sys.refresh_all();
+    // Only needs static info, no refresh needed really but we'll use the shared one
+    let sys = SYSTEM_MONITOR.lock().unwrap();
     calculate_profile(sys.cpus().len(), sys.total_memory())
 }
 
@@ -246,7 +248,8 @@ fn open_output_folder(working_dir: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn scan_for_projects(start_path: String) -> Vec<String> {
+async fn scan_for_projects(start_path: String) -> Vec<String> {
+
     use std::collections::HashSet;
     let mut projects = HashSet::new(); // Use Set to avoid duplicates
     
