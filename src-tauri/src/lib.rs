@@ -245,6 +245,34 @@ fn open_output_folder(working_dir: String) -> Result<String, String> {
     }
 }
 
+#[tauri::command]
+fn scan_for_projects(start_path: String) -> Vec<String> {
+    let mut projects = Vec::new();
+    let root = std::path::Path::new(&start_path);
+
+    if !root.exists() || !root.is_dir() {
+        return projects;
+    }
+
+    // specific check: Does current folder have android/ ?
+    if root.join("android").exists() {
+        projects.push(start_path.clone());
+    }
+
+    // Scan subdirectories (Depth 1)
+    if let Ok(entries) = std::fs::read_dir(root) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() && path.join("android").exists() {
+                if let Some(s) = path.to_str() {
+                    projects.push(s.to_string());
+                }
+            }
+        }
+    }
+    projects
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -259,7 +287,8 @@ pub fn run() {
             purge_wsl,
             prewarm_engine,
             nuke_build,
-            open_output_folder
+            open_output_folder,
+            scan_for_projects
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

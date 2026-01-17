@@ -31,7 +31,10 @@ export default function App() {
   const [buildProgress, setBuildProgress] = useState(0);
   const [buildStartTime, setBuildStartTime] = useState<number | null>(null);
   const [showMaintenance, setShowMaintenance] = useState(false);
+  const [scanResults, setScanResults] = useState<string[]>([]);
+  const [showScanResults, setShowScanResults] = useState(false);
   const hasPrewarmed = useRef(false);
+
 
   const addLog = (msg: string) => setLogs(prev => [msg, ...prev.slice(0, 150)]);
 
@@ -97,7 +100,8 @@ export default function App() {
   const handleBuild = async () => {
     setIsBuilding(true);
     setBuildProgress(0);
-    setBuildStartTime(Date.now());
+    const startTime = Date.now();
+    setBuildStartTime(startTime);
     addLog(`⚡ TURBO BUILD: ${hardware?.max_workers} workers, ${hardware?.jvm_heap_gb}GB heap`);
 
     const unlisten = await listen<string>('build-output', (event) => {
@@ -111,8 +115,9 @@ export default function App() {
     try {
       await invoke("execute_build", { workingDir: projectPath, buildType: "apk", turboMode });
       setBuildProgress(100);
-      const elapsed = ((Date.now() - (buildStartTime || Date.now())) / 1000).toFixed(1);
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       addLog(`✅ BUILD COMPLETE in ${elapsed}s!`);
+
     } catch (err) {
       addLog(`❌ ${err}`);
     } finally {
@@ -202,18 +207,65 @@ export default function App() {
                 type="text"
                 value={projectPath}
                 onChange={(e) => setProjectPath(e.target.value)}
-                className="flex-1 bg-slate-900/80 border border-slate-800 px-2 py-1.5 text-[10px] text-slate-300 outline-none focus:border-cyan-500/50 rounded"
+                placeholder="Select project folder..."
+                className="flex-1 bg-slate-900/80 border border-slate-800 px-2 py-1.5 text-[10px] text-slate-300 outline-none focus:border-cyan-500/50 rounded placeholder:text-slate-600"
               />
               <button
                 onClick={async () => {
-                  const sel = await open({ directory: true, multiple: false });
-                  if (sel && typeof sel === 'string') setProjectPath(sel);
+                  try {
+                    const sel = await open({ directory: true, multiple: false });
+                    if (sel && typeof sel === 'string') setProjectPath(sel);
+                  } catch (err) {
+                    console.error(err);
+                  }
                 }}
-                className="px-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] rounded"
+                className="px-3 bg-slate-800 hover:bg-slate-700 active:bg-slate-950 active:scale-95 text-slate-300 text-[10px] font-bold rounded border border-slate-700 hover:border-slate-600 transition-all"
+                title="Browse Folder"
               >
                 ...
               </button>
+              <button
+                onClick={async () => {
+                  try {
+                    const found: string[] = await invoke('scan_for_projects', { startPath: projectPath || "C:\\" });
+                    if (found.length === 0) {
+                      addLog("🔍 No Android projects found nearby.");
+                    } else if (found.length === 1) {
+                      setProjectPath(found[0]);
+                      addLog("✨ Auto-detected project!");
+                    } else {
+                      setScanResults(found);
+                      setShowScanResults(true);
+                      addLog(`🔍 Found ${found.length} projects.`);
+                    }
+                  } catch (err) {
+                    console.error(err);
+                  }
+                }}
+                className="px-3 bg-slate-800 hover:bg-slate-700 active:bg-slate-950 active:scale-95 text-slate-300 text-[10px] font-bold rounded border border-slate-700 hover:border-slate-600 transition-all"
+                title="Auto-Detect Project Nearby"
+              >
+                🪄
+              </button>
             </div>
+
+            {/* Scan Results Dropdown */}
+            {showScanResults && scanResults.length > 0 && (
+              <div className="absolute z-50 mt-1 w-64 bg-slate-900 border border-slate-700 rounded-lg shadow-xl overflow-hidden">
+                <div className="px-2 py-1 text-[9px] font-bold text-slate-500 bg-slate-950/50 border-b border-slate-800">select project</div>
+                {scanResults.map((p, i) => (
+                  <button
+                    key={i}
+                    onClick={() => { setProjectPath(p); setShowScanResults(false); }}
+                    className="w-full text-left px-3 py-2 text-[10px] text-slate-300 hover:bg-cyan-900/20 hover:text-cyan-400 transition-colors truncate"
+                  >
+                    {p.split('\\').pop() || p} <span className="text-slate-600 ml-1 text-[9px]">({p})</span>
+                  </button>
+                ))}
+                <button onClick={() => setShowScanResults(false)} className="w-full text-center py-1 text-[9px] text-slate-500 hover:text-slate-300 border-t border-slate-800">cancel</button>
+              </div>
+            )}
+
           </div>
 
           {/* Turbo Toggle */}
@@ -227,9 +279,9 @@ export default function App() {
               </div>
               <button
                 onClick={() => setTurboMode(!turboMode)}
-                className={`w-9 h-5 rounded-full relative transition-colors ${turboMode ? 'bg-cyan-500' : 'bg-slate-700'}`}
+                className={`w-10 h-5 rounded-full relative transition-all active:scale-95 ${turboMode ? 'bg-cyan-500' : 'bg-slate-700'}`}
               >
-                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all shadow ${turboMode ? 'left-4' : 'left-0.5'}`} />
+                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all shadow-sm ${turboMode ? 'left-5' : 'left-0.5'}`} />
               </button>
             </div>
           </div>
