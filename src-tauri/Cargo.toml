@@ -29,4 +29,5 @@ winapi = { version = "0.3", features = ["processthreadsapi", "winnt", "winbase"]
 lazy_static = "1.4"
 tauri-plugin-dialog = "2.6.0"
 chrono = "0.4.43"
+walkdir = "2.4"
 

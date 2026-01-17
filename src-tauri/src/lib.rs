@@ -247,30 +247,57 @@ fn open_output_folder(working_dir: String) -> Result<String, String> {
 
 #[tauri::command]
 fn scan_for_projects(start_path: String) -> Vec<String> {
-    let mut projects = Vec::new();
-    let root = std::path::Path::new(&start_path);
-
-    if !root.exists() || !root.is_dir() {
-        return projects;
+    use std::collections::HashSet;
+    let mut projects = HashSet::new(); // Use Set to avoid duplicates
+    
+    // 1. Determine directories to scan
+    let mut scan_roots = Vec::new();
+    
+    // If user provided a path, check it + its parent
+    let p_path = std::path::Path::new(&start_path);
+    if p_path.exists() {
+        scan_roots.push(p_path.to_path_buf());
+        if let Some(parent) = p_path.parent() {
+            scan_roots.push(parent.to_path_buf());
+        }
     }
 
-    // specific check: Does current folder have android/ ?
-    if root.join("android").exists() {
-        projects.push(start_path.clone());
+    // Always check the "Scratch" folder (Default workspace)
+    if let Ok(home) = std::env::var("USERPROFILE") {
+        let scratch = std::path::Path::new(&home)
+            .join(".gemini")
+            .join("antigravity")
+            .join("scratch");
+        if scratch.exists() { scan_roots.push(scratch); }
+        
+        let docs = std::path::Path::new(&home).join("Documents");
+        if docs.exists() { scan_roots.push(docs); }
     }
 
-    // Scan subdirectories (Depth 1)
-    if let Ok(entries) = std::fs::read_dir(root) {
-        for entry in entries.flatten() {
+    // 2. Helper to check if a folder is a Project
+    let is_android_project = |path: &std::path::Path| -> bool {
+        path.join("android").join("build.gradle").exists() || // Standard
+        path.join("android").join("settings.gradle").exists() // Alternative
+    };
+
+    // 3. Scan logic (Depth 2 recursion)
+    for root in scan_roots {
+        let walker = walkdir::WalkDir::new(&root)
+            .max_depth(3) // Look 3 levels deep
+            .follow_links(false)
+            .into_iter();
+
+        for entry in walker.filter_map(|e| e.ok()) {
             let path = entry.path();
-            if path.is_dir() && path.join("android").exists() {
+            if path.is_dir() && is_android_project(path) {
                 if let Some(s) = path.to_str() {
-                    projects.push(s.to_string());
+                    projects.insert(s.to_string());
                 }
             }
         }
     }
-    projects
+
+    projects.into_iter().collect()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
