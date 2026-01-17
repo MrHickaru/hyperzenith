@@ -202,6 +202,20 @@ async fn execute_build(
     let status = child.wait().map_err(|e| e.to_string())?;
 
     if status.success() {
+        // Archive the APK with timestamp
+        let apk_source = std::path::Path::new(&working_dir)
+            .join("android/app/build/outputs/apk/debug/app-debug.apk");
+        let builds_dir = std::path::Path::new(&working_dir).join("hyperzenith_builds");
+        let _ = std::fs::create_dir_all(&builds_dir);
+        
+        if apk_source.exists() {
+            let timestamp = Local::now().format("%Y-%m-%d_%H-%M-%S");
+            let dest_name = format!("app-debug_{}.apk", timestamp);
+            let dest_path = builds_dir.join(&dest_name);
+            let _ = std::fs::copy(&apk_source, &dest_path);
+            println!("📦 [ARCHIVE] APK saved to: {}", dest_path.display());
+        }
+        
         Ok("Build completed!".to_string())
     } else {
         let logs_dir = std::path::Path::new(&working_dir).join("hyperzenith_logs");
@@ -232,22 +246,19 @@ fn nuke_build(working_dir: String) -> Result<String, String> {
 
 #[tauri::command]
 fn open_output_folder(working_dir: String) -> Result<String, String> {
-    let apk_path = std::path::Path::new(&working_dir)
-        .join("android")
-        .join("app")
-        .join("build")
-        .join("outputs")
-        .join("apk")
-        .join("debug");
+    let builds_dir = std::path::Path::new(&working_dir).join("hyperzenith_builds");
     
-    if apk_path.exists() {
+    // Create dir if it doesn't exist (first-time users)
+    let _ = std::fs::create_dir_all(&builds_dir);
+    
+    if builds_dir.exists() {
         Command::new("explorer")
-            .arg(apk_path.to_str().unwrap())
+            .arg(builds_dir.to_str().unwrap())
             .spawn()
             .map_err(|e| e.to_string())?;
-        Ok("Opened Explorer".to_string())
+        Ok("Opened Archive".to_string())
     } else {
-        Err("APK folder not found yet. Build first!".to_string())
+        Err("Build folder not found. Run a build first!".to_string())
     }
 }
 

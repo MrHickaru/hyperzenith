@@ -29,3 +29,6 @@ src-tauri/Cargo.lock
 
 # HyperZenith logs
 hyperzenith_logs/
+
+# HyperZenith APK Archives (user-specific)
+hyperzenith_builds/
