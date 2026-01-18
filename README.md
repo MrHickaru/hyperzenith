@@ -1,50 +1,50 @@
 # HyperZenith 🏎️
-> **Speed up and manage your local Android builds for Expo & React Native.**
+> **The Cross-Platform Build Orchestrator for React Native & Expo.**
 
-A sleek Tauri + React desktop app that supercharges your local Android builds by automatically detecting your hardware and configuring Gradle for maximum parallelism.
+A sleek Tauri desktop app that supercharges your local Android builds and remote-controls your Mac for high-speed iOS builds. HyperZenith manages the "compilation chaos" so you don't have to.
 
-![Version](https://img.shields.io/badge/version-1.4.3-cyan)
+![Version](https://img.shields.io/badge/version-1.4.4-cyan)
 ![Platform](https://img.shields.io/badge/platform-Windows-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-## 🖥️ Screenshot
+## 🖥️ Screenshots
 
 ![HyperZenith Main](screenshot_v1.4.3_main.png)
 ![HyperZenith Settings](screenshot_v1.4.3_settings.png)
+
 ## ✨ Features
 
-### Build Performance
-- **Auto-Detect Hardware** – Detects CPU cores & RAM, allocates ~90% for builds
-- **Turbo Mode** – One-click optimized Gradle flags (`--parallel`, `--build-cache`, `-Dkotlin.incremental=true`)
-- **Live Build Timer** – Real-time MM:SS elapsed time tracking
-- **Fresh vs Cached Detection** – Know instantly if your APK was rebuilt or reused
+### 🤖 Android: Direct Engine
+- **Hardware Auto-Detection** – Scans your CPU cores & RAM to allocate ~90% of resources for builds.
+- **Direct Gradle Injection** – Bypasses Expo CLI overhead by invoking `./gradlew` directly in WSL.
+- **Turbo Config** – One-click optimized flags (`--parallel`, `--build-cache`, `-Dkotlin.incremental=true`).
+- **Smart Caching** – Detects if you're rebuilding the same code or if a fresh build is needed.
 
-### APK Management
-- **AAB & APK Support** – Toggle between debug APKs and store-ready AAB bundles
-- **Managed Archive** – All builds saved to `hyperzenith_builds/` with timestamps
-- **Custom Output Path** – Set your own APK/AAB destination folder (persisted)
-- **Open APK Folder** – One-click access to your archived builds
-- **Clear Archive** – Quickly delete old APKs and AABs
+### 🍎 iOS: Satellite Mode (Experimental)
+> **Build iOS apps from Windows via a remote Mac.**
+- **Headless Remote Control** – No VNC/TeamViewer lag. Send build commands over SSH.
+- **Auto-Sync** – Mirrors your local Windows project to the Mac via `rsync` before every build.
+- **Turbo Xcode** – Runs `xcodebuild` with stripped variables (no indexing, no UI) for maximum speed.
+- **MacinCloud Ready** – Supports custom SSH ports (IP:PORT) and auto-bypasses strict host checking.
 
-### Maintenance Tools
-- **Nuke Gradle Cache** – Force-clear corrupted build directories (`android/app/build`, `.gradle`)
-- **WSL Purge** – Instantly reclaim memory from `VmmemWSL`
-- **Diagnostic Logging** – Timestamped failure logs in `hyperzenith_logs/`
+### ☢️ Nuclear Recovery Tools
+> **"Have you tried turning it off and on again?" — but for compilers.**
+- **Nuke Gradle Cache** – Force-clears `android/app/build` and corrupted Gradle daemons.
+- **Nuke iOS (Remote)** – Automates the "Xcode is cursed" ritual: kills processes, purges `DerivedData`, wipes Simulators, clears CocoaPods, and re-installs Pods.
+- **WSL Purge** – Instantly reclaims memory from `VmmemWSL`.
 
-### UI/UX
-- **Sleek Cyberpunk Design** – Dark theme with neon accents
-- **Live CPU/RAM Stats** – Real-time system monitoring
-- **Project Auto-Detection** – Scans common directories for React Native/Expo projects
-- **Silent Production Builds** – No more popping terminal windows in release mode
-- **Turbo Toggle** – Precise, tactile toggle switch
+### 📦 APK & IPA Management
+- **Artifact Archive** – All builds (APK, AAB, APP, IPA) are saved to `hyperzenith_builds/` with timestamps.
+- **One-Click Install** – Open the output folder instantly.
+- **Logs** – Diagnostic logs for every build failure saved in `hyperzenith_logs/`.
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Windows 10/11 with WSL2
-- Node.js 18+
-- Rust (via rustup)
-- Android SDK (via Android Studio)
+- **Windows 10/11** with WSL2 active.
+- **Node.js 18+** installed in WSL.
+- **Rust** (via rustup) on Windows.
+- **For iOS**: A Mac/MacinCloud accessible via SSH.
 
 ### Installation
 
@@ -65,7 +65,8 @@ npm run tauri build
 
 ## ⚡ How It Works
 
-When you click **IGNITE BUILD**, HyperZenith runs this optimized Gradle command inside WSL:
+### Android Strategy
+HyperZenith ignores the standard `npx expo run:android` and instead constructs a highly optimized Gradle command:
 
 ```bash
 ./gradlew assembleDebug \
@@ -74,18 +75,20 @@ When you click **IGNITE BUILD**, HyperZenith runs this optimized Gradle command 
   --max-workers=18 \
   -Dorg.gradle.caching=true \
   -Dorg.gradle.parallel=true \
-  -Dorg.gradle.vfs.watch=true \
   -Dkotlin.incremental=true \
   -x lint -x test
 ```
 
-The `--max-workers` and JVM heap are auto-calculated from your system specs.
+### iOS Strategy
+1.  **Sync**: `rsync` pushes only changed files to `user@mac:~/builds/project`.
+2.  **Build**: `ssh` triggers `xcodebuild` with `COMPILER_INDEX_STORE_ENABLE=NO` and `RCT_NO_LAUNCH_PACKAGER=1`.
+3.  **Result**: You see the real-time logs on Windows.
 
 ## 🛠️ Tech Stack
 
 - **Frontend**: React + TypeScript + TailwindCSS
 - **Backend**: Rust + Tauri
-- **Build Target**: WSL2 + Gradle
+- **Protocol**: SSH2 + Rsync
 
 ## 📄 License
 
