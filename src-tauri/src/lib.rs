@@ -1,5 +1,6 @@
 use std::sync::{Mutex, Arc};
 use std::process::{Command, Child, Stdio};
+mod ios;
 use std::os::windows::process::CommandExt;
 use tauri::Emitter;
 use lazy_static::lazy_static;
@@ -213,7 +214,18 @@ async fn execute_build(
     t1.join().ok(); t2.join().ok();
     let status = child.wait().map_err(|e| e.to_string())?;
 
-        if status.success() {
+    // ALWAYS write logs
+    let logs_dir = std::path::Path::new(&working_dir).join("hyperzenith_logs");
+    let _ = std::fs::create_dir_all(&logs_dir);
+    let prefix = if status.success() { "android_build_success" } else { "android_build_fail" };
+    let log_path = logs_dir.join(format!("{}_{}.log", prefix, Local::now().format("%Y-%m-%d_%H-%M-%S")));
+    
+    if let Ok(content) = log_buffer.lock() {
+        let _ = std::fs::write(&log_path, content.clone());
+        let _ = app.emit("build-output", format!("📄 Log saved to: {}", log_path.display()));
+    }
+
+    if status.success() {
         // Archive the Artifact with timestamp
         let (output_subpath, ext) = match build_type.as_str() {
             "aab" => ("android/app/build/outputs/bundle/debug/app-debug.aab", "aab"),
@@ -265,10 +277,6 @@ async fn execute_build(
             Ok("Build completed!".to_string())
         }
     } else {
-        let logs_dir = std::path::Path::new(&working_dir).join("hyperzenith_logs");
-        let _ = std::fs::create_dir_all(&logs_dir);
-        let log_path = logs_dir.join(format!("build_fail_{}.log", Local::now().format("%Y-%m-%d_%H-%M-%S")));
-        let _ = std::fs::write(&log_path, log_buffer.lock().unwrap().clone());
         Err(format!("Build failed. Log: {}", log_path.display()))
     }
 }
@@ -369,8 +377,8 @@ fn clear_archive(working_dir: String, custom_path: Option<String>) -> Result<Str
                 
                 if let Some(ext) = path.extension() {
                     let ext_str = ext.to_string_lossy().to_lowercase();
-                    // Case-insensitive check for APK or AAB
-                    if ext_str == "apk" || ext_str == "aab" {
+                    // Case-insensitive check for APK, AAB, IPA, APP
+                    if ext_str == "apk" || ext_str == "aab" || ext_str == "ipa" || ext_str == "app" {
                         println!("🗑️ [CLEAR] >> Deleting {}...", ext_str.to_uppercase());
                         match std::fs::remove_file(&path) {
                             Ok(_) => { 
@@ -398,6 +406,44 @@ fn clear_archive(working_dir: String, custom_path: Option<String>) -> Result<Str
     } else {
         Ok(format!("Cleared {} APK(s)", deleted))
     }
+}
+
+#[tauri::command]
+async fn start_ios_build(app: tauri::AppHandle, working_dir: String, mac_config: ios::MacConfig, remote_path: String, scheme: String, build_type: String) -> Result<String, String> {
+    let app_handle = app.clone();
+    std::thread::spawn(move || {
+        // 1. Convert Windows path to WSL path for rsync
+        let wsl_local_path = windows_to_wsl_path(&working_dir);
+        let _ = app_handle.emit("build-output", "🔄 Syncing files to Mac...".to_string());
+
+        // 2. Sync Files
+        match ios::sync_files(&wsl_local_path, &mac_config, &remote_path) {
+            Ok(_) => { let _ = app_handle.emit("build-output", "✅ Sync Complete.".to_string()); },
+            Err(e) => { 
+                let _ = app_handle.emit("build-output", format!("❌ Sync Failed: {}", e)); 
+                return; // Abort build if sync fails
+            }
+        }
+
+        // 3. Ignite Build
+        match ios::execute_turbo_ios(app_handle.clone(), mac_config, remote_path, scheme, build_type) {
+            Ok(msg) => { let _ = app_handle.emit("build-output", format!("✅ {}", msg)); },
+            Err(e) => { let _ = app_handle.emit("build-output", format!("❌ iOS Build Failed: {}", e)); },
+        }
+    });
+    Ok("Sync & Build Ignited".into())
+}
+
+#[tauri::command]
+async fn trigger_nuke_ios(app: tauri::AppHandle, mac_config: ios::MacConfig, remote_path: String) -> Result<String, String> {
+    let app_handle = app.clone();
+    std::thread::spawn(move || {
+        match ios::nuke_ios_remote(app_handle.clone(), mac_config, remote_path) {
+            Ok(msg) => { let _ = app_handle.emit("build-output", format!("✅ {}", msg)); },
+            Err(e) => { let _ = app_handle.emit("build-output", format!("❌ iOS Nuke Failed: {}", e)); },
+        }
+    });
+    Ok("Nuke Ignited".into())
 }
 
 #[tauri::command]
@@ -473,7 +519,9 @@ pub fn run() {
             open_build_archive,
             open_logs_folder,
             clear_archive,
-            scan_for_projects
+            scan_for_projects,
+            start_ios_build,
+            trigger_nuke_ios
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

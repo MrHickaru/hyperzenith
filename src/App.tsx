@@ -37,7 +37,16 @@ export default function App() {
   const hasPrewarmed = useRef(false);
 
 
-  const [buildType, setBuildType] = useState<'apk' | 'aab'>('apk');
+  const [buildType, setBuildType] = useState<'apk' | 'aab' | 'simulator' | 'device'>('apk');
+  const [platform, setPlatform] = useState<'android' | 'ios'>('android');
+  const [macConfig, setMacConfig] = useState(() => {
+    const saved = localStorage.getItem('hyperzenith_mac_config');
+    return saved ? JSON.parse(saved) : { ip: '', username: '', password: '' };
+  });
+  const [iosRemotePath, setIosRemotePath] = useState(() => localStorage.getItem('hyperzenith_ios_remote_path') || '~/hyperzenith_builds/project');
+  const [iosScheme, setIosScheme] = useState(() => localStorage.getItem('hyperzenith_ios_scheme') || 'App');
+  const [showIosSettings, setShowIosSettings] = useState(false);
+  const unlistenRef = useRef<(() => void) | null>(null);
 
   const addLog = (msg: string) => setLogs(prev => [msg, ...prev.slice(0, 150)]);
 
@@ -102,6 +111,11 @@ export default function App() {
   }, []);
 
   const handleBuild = async () => {
+    // Safety: Ensure no zombie listeners exist from previous runs
+    if (unlistenRef.current) {
+      unlistenRef.current();
+      unlistenRef.current = null;
+    }
     setIsBuilding(true);
     setBuildProgress(0);
     const startTime = Date.now();
@@ -111,25 +125,67 @@ export default function App() {
     const unlisten = await listen<string>('build-output', (event) => {
       const line = event.payload;
       if (line.trim()) addLog(line.slice(0, 120));
+
       const est = estimateProgress(line);
       if (est > 0) setBuildProgress(prev => Math.max(prev, est));
       else setBuildProgress(prev => Math.min(prev + 0.08, 95));
+
+      // Handle iOS Completion/Error signals
+      if (platform === 'ios') {
+        if (line.includes('✅') || line.includes('❌')) {
+          if (line.includes('✅')) setBuildProgress(100);
+          else setBuildProgress(0);
+          setIsBuilding(false);
+          unlisten();
+          unlistenRef.current = null; // Clear ref on clean exit
+        }
+      }
     });
+    unlistenRef.current = unlisten;
 
     try {
-      await invoke("execute_build", { workingDir: projectPath, buildType, turboMode, customPath: customArchivePath || null });
-      setBuildProgress(100);
-      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-      addLog(`✅ BUILD COMPLETE in ${elapsed}s!`);
-      if (turboMode) {
-        addLog(`⚡ Direct Engine mode (~3x faster than standard)`);
+      if (platform === 'android') {
+        await invoke("execute_build", { workingDir: projectPath, buildType, turboMode, customPath: customArchivePath || null });
+        setBuildProgress(100);
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        addLog(`✅ BUILD COMPLETE in ${elapsed}s!`);
+        if (turboMode) {
+          addLog(`⚡ Direct Engine mode (~3x faster than standard)`);
+        }
+      } else {
+        addLog(`🍎 Connecting to Satellite: ${macConfig.ip}...`);
+        await invoke("start_ios_build", {
+          workingDir: projectPath,
+          macConfig,
+          remotePath: iosRemotePath,
+          scheme: iosScheme,
+          buildType
+        });
+        addLog(`📡 Sync & Build command sent.`);
       }
 
     } catch (err) {
       addLog(`❌ ${err}`);
-    } finally {
-      unlisten();
+      setBuildProgress(0);
       setIsBuilding(false);
+      unlisten();
+      unlistenRef.current = null;
+    } finally {
+      if (platform === 'android') {
+        unlisten();
+        unlistenRef.current = null;
+        setIsBuilding(false);
+      }
+    }
+  };
+
+  const handleIosNuke = async () => {
+    addLog("☢️ Initiating iOS Nuclear Sequence...");
+    try {
+      await invoke("trigger_nuke_ios", { macConfig, remotePath: iosRemotePath });
+      addLog("✅ Nuke sequence ignited.");
+    } catch (err) {
+      addLog(`❌ ${err}`);
     }
   };
 
@@ -300,25 +356,60 @@ export default function App() {
               )}
             </div>
 
+            {/* Platform Toggle */}
+            <div className="flex bg-slate-900/80 border border-slate-800 rounded p-1 mb-3">
+              <button
+                onClick={() => { setPlatform('android'); setShowMaintenance(false); }}
+                className={`flex-1 py-1 text-[9px] font-black rounded transition-all flex items-center justify-center gap-1 ${platform === 'android' ? 'bg-emerald-500 text-black shadow-sm' : 'text-slate-500 hover:text-slate-400'}`}
+              >
+                <span>🤖</span> ANDROID
+              </button>
+              <button
+                onClick={() => { setPlatform('ios'); setShowMaintenance(false); }}
+                className={`flex-1 py-1 text-[9px] font-black rounded transition-all flex items-center justify-center gap-1 ${platform === 'ios' ? 'bg-cyan-500 text-black shadow-sm' : 'text-slate-500 hover:text-slate-400'}`}
+              >
+                <span>🍎</span> IOS
+              </button>
+            </div>
+
             {/* Configuration Card (Type + Turbo) */}
             <div className={`p-3 rounded-lg border transition-all duration-300 ${turboMode ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-900/40 border-slate-800'}`}>
 
               {/* Build Type Row */}
               <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-700/30">
-                <span className="text-[10px] font-bold text-slate-500 tracking-wider">BUILD TARGET</span>
-                <div className="flex bg-slate-900/80 border border-slate-800 rounded p-0.5">
-                  <button
-                    onClick={() => setBuildType('apk')}
-                    className={`px-3 py-1 text-[9px] font-black rounded transition-all ${buildType === 'apk' ? 'bg-cyan-500 text-black shadow-sm' : 'text-slate-500 hover:text-slate-400'}`}
-                  >
-                    APK
-                  </button>
-                  <button
-                    onClick={() => setBuildType('aab')}
-                    className={`px-3 py-1 text-[9px] font-black rounded transition-all ${buildType === 'aab' ? 'bg-cyan-500 text-black shadow-sm' : 'text-slate-500 hover:text-slate-400'}`}
-                  >
-                    AAB
-                  </button>
+                <span className="text-[10px] font-bold text-slate-500 tracking-wider">TARGET</span>
+                <div className="grid grid-cols-2 gap-1 w-[76px] bg-slate-900/80 border border-slate-800 rounded p-0.5">
+                  {platform === 'android' ? (
+                    <>
+                      <button
+                        onClick={() => setBuildType('apk')}
+                        className={`min-w-0 py-1 text-[9px] font-black rounded transition-all ${buildType === 'apk' ? 'bg-cyan-500 text-black' : 'text-slate-500 hover:text-slate-400'}`}
+                      >
+                        APK
+                      </button>
+                      <button
+                        onClick={() => setBuildType('aab')}
+                        className={`min-w-0 py-1 text-[9px] font-black rounded transition-all ${buildType === 'aab' ? 'bg-cyan-500 text-black' : 'text-slate-500 hover:text-slate-400'}`}
+                      >
+                        AAB
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setBuildType('simulator')}
+                        className={`min-w-0 py-1 text-[9px] font-black rounded transition-all ${buildType === 'simulator' ? 'bg-cyan-500 text-black' : 'text-slate-500 hover:text-slate-400'}`}
+                      >
+                        APP
+                      </button>
+                      <button
+                        onClick={() => setBuildType('device')}
+                        className={`min-w-0 py-1 text-[9px] font-black rounded transition-all ${buildType === 'device' ? 'bg-cyan-500 text-black' : 'text-slate-500 hover:text-slate-400'}`}
+                      >
+                        IPA
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -399,6 +490,44 @@ export default function App() {
               )}
             </div>
 
+            {/* iOS Satellite Configuration */}
+            {platform === 'ios' && (
+              <div className="p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-lg space-y-2 relative">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest">SATELLITE</span>
+                  <button onClick={() => setShowIosSettings(!showIosSettings)} className="text-cyan-400 p-1 hover:bg-cyan-400/20 rounded">⚙️</button>
+                </div>
+                {showIosSettings ? (
+                  <div className="space-y-1 mt-1">
+                    <input type="text" value={macConfig.ip} onChange={e => {
+                      const c = { ...macConfig, ip: e.target.value };
+                      setMacConfig(c); localStorage.setItem('hyperzenith_mac_config', JSON.stringify(c));
+                    }} placeholder="Mac IP (e.g. 192.168.1.15)" className="w-full bg-slate-950 border border-slate-800 px-2 py-1 text-[9px] rounded outline-none focus:border-cyan-500/50" />
+                    <input type="text" value={macConfig.username} onChange={e => {
+                      const c = { ...macConfig, username: e.target.value };
+                      setMacConfig(c); localStorage.setItem('hyperzenith_mac_config', JSON.stringify(c));
+                    }} placeholder="Username" className="w-full bg-slate-950 border border-slate-800 px-2 py-1 text-[9px] rounded outline-none focus:border-cyan-500/50" />
+                    <input type="password" value={macConfig.password} onChange={e => {
+                      const c = { ...macConfig, password: e.target.value };
+                      setMacConfig(c); localStorage.setItem('hyperzenith_mac_config', JSON.stringify(c));
+                    }} placeholder="Password" className="w-full bg-slate-950 border border-slate-800 px-2 py-1 text-[9px] rounded outline-none focus:border-cyan-500/50" />
+                    <input type="text" value={iosRemotePath} onChange={e => {
+                      setIosRemotePath(e.target.value); localStorage.setItem('hyperzenith_ios_remote_path', e.target.value);
+                    }} placeholder="Remote Project Path" className="w-full bg-slate-950 border border-slate-800 px-2 py-1 text-[9px] rounded outline-none focus:border-cyan-500/50" />
+                    <input type="text" value={iosScheme} onChange={e => {
+                      setIosScheme(e.target.value); localStorage.setItem('hyperzenith_ios_scheme', e.target.value);
+                    }} placeholder="Scheme" className="w-full bg-slate-950 border border-slate-800 px-2 py-1 text-[9px] rounded outline-none focus:border-cyan-500/50" />
+                    <button onClick={() => setShowIosSettings(false)} className="w-full py-1 mt-1 bg-cyan-500 text-black text-[8px] font-bold rounded">SAVE CONFIG</button>
+                  </div>
+                ) : (
+                  <div className="text-[9px] text-slate-400">
+                    <div>{macConfig.ip || 'No IP'} • {macConfig.username || 'No User'}</div>
+                    <div className="truncate opacity-60">Path: {iosRemotePath}</div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Build Button */}
             <button
               onClick={isBuilding ? handleAbort : handleBuild}
@@ -407,10 +536,13 @@ export default function App() {
                 : 'bg-gradient-to-r from-cyan-500 to-emerald-500 text-black hover:from-cyan-400 hover:to-emerald-400 active:scale-[0.98]'
                 }`}
             >
-              {isBuilding ? `🛑 ABORT ${formatTime(elapsedTime)} (${Math.round(buildProgress)}%)` : `🚀 IGNITE ${buildType.toUpperCase()} BUILD`}
+              {isBuilding
+                ? `🛑 ABORT ${formatTime(elapsedTime)} (${Math.round(buildProgress)}%)`
+                : `🚀 IGNITE ${buildType === 'simulator' ? 'APP' : buildType === 'device' ? 'IPA' : buildType.toUpperCase()}`
+              }
             </button>
 
-            {/* Open APK Folder Button */}
+            {/* Open Output Folder Button */}
             <button
               onClick={handleOpenOutput}
               disabled={isBuilding}
@@ -421,7 +553,7 @@ export default function App() {
                   : 'bg-slate-900/50 border-slate-800 text-slate-500 hover:bg-slate-800'
                 }`}
             >
-              📂 Open APK Folder
+              {`📂 OPEN ${buildType === 'simulator' ? 'APP' : buildType === 'device' ? 'IPA' : buildType.toUpperCase()}`}
             </button>
 
             {/* Live Stats */}
@@ -449,9 +581,15 @@ export default function App() {
             </button>
             {showMaintenance && (
               <div className="absolute bottom-full left-0 right-0 mx-2 mb-2 p-2 bg-slate-900 border border-slate-800 rounded-lg space-y-1 shadow-2xl z-30">
-                <button onClick={handleNuke} className="w-full py-1.5 text-[9px] font-semibold uppercase bg-red-900/30 text-red-400 rounded hover:bg-red-900/50 transition-colors">
-                  🧨 Nuke Gradle Cache
-                </button>
+                {platform === 'android' ? (
+                  <button onClick={handleNuke} className="w-full py-1.5 text-[9px] font-semibold uppercase bg-red-900/30 text-red-400 rounded hover:bg-red-900/50 transition-colors">
+                    🧨 Nuke Gradle Cache
+                  </button>
+                ) : (
+                  <button onClick={handleIosNuke} className="w-full py-1.5 text-[9px] font-semibold uppercase bg-red-900/30 text-red-400 rounded hover:bg-red-900/50 transition-colors">
+                    ☢️ Nuclear iOS Reset
+                  </button>
+                )}
                 <button onClick={handleClearArchive} className="w-full py-1.5 text-[9px] font-semibold uppercase bg-purple-900/30 text-purple-400 rounded hover:bg-purple-900/50 transition-colors">
                   🗑️ Clear Archive
                 </button>

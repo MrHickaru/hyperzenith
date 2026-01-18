@@ -1,6 +1,6 @@
 [package]
 name = "hyperzenith"
-version = "1.4.0"
+version = "1.4.2"
 description = "High-performance Android build orchestrator for Expo/React Native"
 authors = ["MrHickaru"]
 edition = "2021"
@@ -27,7 +27,9 @@ serde_json = "1"
 sysinfo = "0.30"
 winapi = { version = "0.3", features = ["processthreadsapi", "winnt", "winbase"] }
 lazy_static = "1.4"
+ssh2 = "0.9"
 tauri-plugin-dialog = "2.6.0"
 chrono = "0.4.43"
 walkdir = "2.4"
+dirs = "6.0.0"
 
