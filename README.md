@@ -3,7 +3,7 @@
 
 A sleek Tauri + React desktop app that supercharges your local Android builds by automatically detecting your hardware and configuring Gradle for maximum parallelism.
 
-![Version](https://img.shields.io/badge/version-1.3.7-cyan)
+![Version](https://img.shields.io/badge/version-1.4.0-cyan)
 ![Platform](https://img.shields.io/badge/platform-Windows-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
