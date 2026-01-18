@@ -1,8 +1,11 @@
 use std::sync::{Mutex, Arc};
 use std::process::{Command, Child, Stdio};
+use std::os::windows::process::CommandExt;
 use tauri::Emitter;
 use lazy_static::lazy_static;
 use chrono::Local;
+
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 lazy_static! {
     static ref ACTIVE_BUILD_HANDLE: Mutex<Option<Child>> = Mutex::new(None);
@@ -103,7 +106,9 @@ fn prewarm_engine(working_dir: String) -> Result<String, String> {
         println!("🔥 [SYSTEM] PRE-WARMING GRADLE DAEMON...");
         if let Ok(mut child) = Command::new("wsl")
             .args(["-e", "bash", "-c", &format!("cd '{}/android' && ./gradlew --version", wsl_path)])
-            .stdout(Stdio::null()).stderr(Stdio::null()).spawn() 
+            .stdout(Stdio::null()).stderr(Stdio::null())
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn() 
         {
             let _ = child.wait();
             println!("✅ [SYSTEM] ENGINE WARMED.");
@@ -116,7 +121,7 @@ fn prewarm_engine(working_dir: String) -> Result<String, String> {
 async fn execute_build(
     app: tauri::AppHandle,
     working_dir: String, 
-    _build_type: String,
+    build_type: String,
     turbo_mode: bool,
     custom_path: Option<String>
 ) -> Result<String, String> {
@@ -135,6 +140,11 @@ async fn execute_build(
     let android_sdk_path = windows_to_wsl_path(&win_sdk_path);
 
 
+    let task = match build_type.as_str() {
+        "aab" => "bundleDebug",
+        _ => "assembleDebug",
+    };
+
     let wsl_cmd = if turbo_mode {
         // V1.2 SUPER-SONIC EDITION: Configuration Cache + Parallel GC + High Throughput
         format!(
@@ -143,7 +153,7 @@ async fn execute_build(
              export PATH=$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH && \
              export GRADLE_OPTS="-Xmx{}g -XX:+UseParallelGC -XX:MaxMetaspaceSize=1g -Dorg.gradle.daemon.idletimeout=3600000" && \
              cd '{}/android' && chmod +x ./gradlew && \
-             ./gradlew assembleDebug \
+             ./gradlew {} \
                --parallel \
                --build-cache \
                --configuration-cache \
@@ -155,7 +165,7 @@ async fn execute_build(
                -Dkotlin.incremental=true \
                -x lint -x test \
                2>&1"#,
-            android_sdk_path, hw.jvm_heap_gb, wsl_path, hw.max_workers
+            android_sdk_path, hw.jvm_heap_gb, wsl_path, task, hw.max_workers
         )
 
 
@@ -175,6 +185,7 @@ async fn execute_build(
         .args(["-e", "bash", "-c", &wsl_cmd])
         .current_dir(&working_dir)
         .stdout(Stdio::piped()).stderr(Stdio::piped())
+        .creation_flags(CREATE_NO_WINDOW)
         .spawn().map_err(|e| e.to_string())?;
 
     let stdout = child.stdout.take().unwrap();
@@ -203,9 +214,13 @@ async fn execute_build(
     let status = child.wait().map_err(|e| e.to_string())?;
 
         if status.success() {
-        // Archive the APK with timestamp
-        let apk_source = std::path::Path::new(&working_dir)
-            .join("android/app/build/outputs/apk/debug/app-debug.apk");
+        // Archive the Artifact with timestamp
+        let (output_subpath, ext) = match build_type.as_str() {
+            "aab" => ("android/app/build/outputs/bundle/debug/app-debug.aab", "aab"),
+            _ => ("android/app/build/outputs/apk/debug/app-debug.apk", "apk"),
+        };
+
+        let source_path = std::path::Path::new(&working_dir).join(output_subpath);
         
         let builds_dir = match custom_path {
             Some(p) if !p.is_empty() => std::path::PathBuf::from(p),
@@ -214,28 +229,28 @@ async fn execute_build(
         
         let _ = std::fs::create_dir_all(&builds_dir);
         
-        if apk_source.exists() {
-            // Check if APK is fresh or cached by looking at modification time
-            let apk_modified = apk_source.metadata()
+        if source_path.exists() {
+            // Check if Artifact is fresh or cached by looking at modification time
+            let modified = source_path.metadata()
                 .and_then(|m| m.modified())
                 .ok();
             
-            let is_fresh = apk_modified.map(|m| {
+            let is_fresh = modified.map(|m| {
                 let age = std::time::SystemTime::now().duration_since(m).unwrap_or_default();
-                age.as_secs() < 120 // APK modified within last 2 minutes = fresh
+                age.as_secs() < 120 // Modified within last 2 minutes = fresh
             }).unwrap_or(false);
             
             let timestamp = Local::now().format("%Y-%m-%d_%H-%M-%S");
-            let dest_name = format!("app-debug_{}.apk", timestamp);
+            let dest_name = format!("app-debug_{}.{}", timestamp, ext);
             let dest_path = builds_dir.join(&dest_name);
             
-            match std::fs::copy(&apk_source, &dest_path) {
+            match std::fs::copy(&source_path, &dest_path) {
                 Ok(_) => {
                     let _ = app.emit("build-output", format!("📂 Saved to: {}", dest_path.display()));
                     if is_fresh {
-                        let _ = app.emit("build-output", "📦 New APK archived!");
+                        let _ = app.emit("build-output", format!("📦 New {} archived!", ext.to_uppercase()));
                     } else {
-                        let _ = app.emit("build-output", "♻️ Cached APK (code unchanged)");
+                        let _ = app.emit("build-output", format!("♻️ Cached {} (code unchanged)", ext.to_uppercase()));
                     }
                 },
                 Err(e) => println!("📦 [ARCHIVE] ❌ Copy failed: {}", e),
@@ -353,9 +368,10 @@ fn clear_archive(working_dir: String, custom_path: Option<String>) -> Result<Str
                 println!("🗑️ [CLEAR] Found item: {}", path.display());
                 
                 if let Some(ext) = path.extension() {
-                    // Case-insensitive check
-                    if ext.to_string_lossy().to_lowercase() == "apk" {
-                        println!("🗑️ [CLEAR] >> Deleting APK...");
+                    let ext_str = ext.to_string_lossy().to_lowercase();
+                    // Case-insensitive check for APK or AAB
+                    if ext_str == "apk" || ext_str == "aab" {
+                        println!("🗑️ [CLEAR] >> Deleting {}...", ext_str.to_uppercase());
                         match std::fs::remove_file(&path) {
                             Ok(_) => { 
                                 println!("🗑️ [CLEAR] >> ✅ Deleted.");
@@ -364,7 +380,7 @@ fn clear_archive(working_dir: String, custom_path: Option<String>) -> Result<Str
                             Err(e) => println!("🗑️ [CLEAR] >> ❌ Failed to delete: {}", e),
                         }
                     } else {
-                         println!("🗑️ [CLEAR] >> Skipping non-APK (ext: {:?})", ext);
+                         println!("🗑️ [CLEAR] >> Skipping non-artifact (ext: {:?})", ext);
                     }
                 } else {
                     println!("🗑️ [CLEAR] >> Skipping (no extension)");
@@ -487,6 +503,19 @@ mod tests {
         let hw_low = calculate_profile(2, 4 * gigabyte);
         assert_eq!(hw_low.jvm_heap_gb, 4); 
         assert_eq!(hw_low.max_workers, 4); 
+    }
+
+    #[test]
+    fn test_aab_path_logic() {
+        let build_type = "aab".to_string();
+        let (output_subpath, ext) = match build_type.as_str() {
+            "aab" => ("android/app/build/outputs/bundle/debug/app-debug.aab", "aab"),
+            _ => ("android/app/build/outputs/apk/debug/app-debug.apk", "apk"),
+        };
+        
+        assert_eq!(ext, "aab");
+        assert!(output_subpath.contains("bundle"));
+        assert!(output_subpath.contains(".aab"));
     }
 }
 

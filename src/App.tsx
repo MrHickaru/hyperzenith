@@ -37,6 +37,8 @@ export default function App() {
   const hasPrewarmed = useRef(false);
 
 
+  const [buildType, setBuildType] = useState<'apk' | 'aab'>('apk');
+
   const addLog = (msg: string) => setLogs(prev => [msg, ...prev.slice(0, 150)]);
 
   // Fetch hardware profile on mount
@@ -93,6 +95,7 @@ export default function App() {
     if (l.includes(':merge') || l.includes('merging')) return 60;
     if (l.includes(':package') || l.includes('packaging')) return 72;
     if (l.includes(':assemble') || l.includes('assembling')) return 85;
+    if (l.includes(':bundle') || l.includes('bundling')) return 85; // Handled AAB step
     if (l.includes('signing') || l.includes(':sign')) return 92;
     if (l.includes('build successful') || l.includes('build completed')) return 100;
     return -1;
@@ -103,7 +106,7 @@ export default function App() {
     setBuildProgress(0);
     const startTime = Date.now();
     setBuildStartTime(startTime);
-    addLog(`⚡ TURBO BUILD: ${hardware?.max_workers} workers, ${hardware?.jvm_heap_gb}GB heap`);
+    addLog(`⚡ TURBO BUILD: ${hardware?.max_workers} workers, ${hardware?.jvm_heap_gb}GB heap (${buildType.toUpperCase()})`);
 
     const unlisten = await listen<string>('build-output', (event) => {
       const line = event.payload;
@@ -114,7 +117,7 @@ export default function App() {
     });
 
     try {
-      await invoke("execute_build", { workingDir: projectPath, buildType: "apk", turboMode, customPath: customArchivePath || null });
+      await invoke("execute_build", { workingDir: projectPath, buildType, turboMode, customPath: customArchivePath || null });
       setBuildProgress(100);
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       addLog(`✅ BUILD COMPLETE in ${elapsed}s!`);
@@ -224,162 +227,182 @@ export default function App() {
       {/* Main */}
       <div className="flex-1 flex min-h-0">
         {/* Left Panel */}
-        <aside className="w-64 shrink-0 p-4 space-y-3 border-r border-slate-800/30 flex flex-col overflow-y-auto">
-          {/* Project */}
-          <div>
-            <label className="text-[9px] font-bold uppercase tracking-widest text-slate-600 block mb-1">Project</label>
-            <div className="flex gap-1">
-              <input
-                type="text"
-                value={projectPath}
-                onChange={(e) => setProjectPath(e.target.value)}
-                placeholder="Select project folder..."
-                className="flex-1 bg-slate-900/80 border border-slate-800 px-2 py-1.5 text-[10px] text-slate-300 outline-none focus:border-cyan-500/50 rounded placeholder:text-slate-600"
-              />
-              <button
-                onClick={async () => {
-                  try {
-                    const sel = await open({ directory: true, multiple: false });
-                    if (sel && typeof sel === 'string') setProjectPath(sel);
-                  } catch (err) {
-                    console.error(err);
-                  }
-                }}
-                className="px-3 bg-slate-800 hover:bg-slate-700 active:bg-slate-950 active:scale-95 text-slate-300 text-[10px] font-bold rounded border border-slate-700 hover:border-slate-600 transition-all"
-                title="Browse Folder"
-              >
-                ...
-              </button>
-              <button
-                onClick={async () => {
-                  try {
-                    const found: string[] = await invoke('scan_for_projects', { startPath: projectPath || "C:\\" });
-                    if (found.length === 0) {
-                      addLog("🔍 No Android projects found nearby.");
-                    } else if (found.length === 1) {
-                      setProjectPath(found[0]);
-                      addLog("✨ Auto-detected project!");
-                    } else {
-                      setScanResults(found);
-                      setShowScanResults(true);
-                      addLog(`🔍 Found ${found.length} projects.`);
-                    }
-                  } catch (err) {
-                    console.error(err);
-                  }
-                }}
-                className="px-3 bg-slate-800 hover:bg-slate-700 active:bg-slate-950 active:scale-95 text-slate-300 text-[10px] font-bold rounded border border-slate-700 hover:border-slate-600 transition-all"
-                title="Auto-Detect Project Nearby"
-              >
-                🪄
-              </button>
-            </div>
-
-            {/* Scan Results Dropdown */}
-            {showScanResults && scanResults.length > 0 && (
-              <div className="absolute z-50 mt-1 w-64 bg-slate-900 border border-slate-700 rounded-lg shadow-xl overflow-hidden">
-                <div className="px-2 py-1 text-[9px] font-bold text-slate-500 bg-slate-950/50 border-b border-slate-800">select project</div>
-                {scanResults.map((p, i) => (
-                  <button
-                    key={i}
-                    onClick={() => { setProjectPath(p); setShowScanResults(false); }}
-                    className="w-full text-left px-3 py-2 text-[10px] text-slate-300 hover:bg-cyan-900/20 hover:text-cyan-400 transition-colors truncate"
-                  >
-                    {p.split('\\').pop() || p} <span className="text-slate-600 ml-1 text-[9px]">({p})</span>
-                  </button>
-                ))}
-                <button onClick={() => setShowScanResults(false)} className="w-full text-center py-1 text-[9px] text-slate-500 hover:text-slate-300 border-t border-slate-800">cancel</button>
-              </div>
-            )}
-
-          </div>
-
-          {/* Turbo Toggle */}
-          <div className={`p-3 rounded-lg border transition-all duration-300 ${turboMode ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-900/40 border-slate-800'}`}>
-            <div className="flex justify-between items-center">
-              <div>
-                <div className={`text-xs font-bold tracking-wide transition-colors ${turboMode ? 'text-emerald-400' : 'text-slate-400'}`}>
-                  {turboMode ? '⚡ TURBO ACTIVE' : '🐢 TURBO OFF'}
-                </div>
-                <div className="text-[9px] text-slate-500 mt-0.5 font-medium">
-                  {hardware ? `${hardware.max_workers} workers • ${hardware.jvm_heap_gb}GB heap` : 'Auto-detecting...'}
-                </div>
-              </div>
-              <button
-                onClick={() => setTurboMode(!turboMode)}
-                style={{
-                  width: '32px',
-                  height: '16px',
-                  borderRadius: '8px',
-                  backgroundColor: turboMode ? '#10b981' : '#475569',
-                  position: 'relative',
-                  transition: 'all 0.3s',
-                  boxShadow: turboMode ? '0 0 8px rgba(16, 185, 129, 0.4)' : 'none',
-                  cursor: 'pointer',
-                  border: 'none',
-                  marginRight: '5px'
-                }}
-              >
-                <div
-                  style={{
-                    width: '10px',
-                    height: '10px',
-                    borderRadius: '50%',
-                    backgroundColor: 'white',
-                    position: 'absolute',
-                    top: '3px',
-                    left: turboMode ? '19px' : '3px',
-                    transition: 'all 0.3s',
-                    boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
-                  }}
+        <aside className="w-40 shrink-0 border-r border-slate-800/30 flex flex-col bg-[#08090d]">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-3 custom-scrollbar">
+            {/* Project */}
+            <div>
+              <label className="text-[9px] font-bold uppercase tracking-widest text-slate-600 block mb-1">Project</label>
+              <div className="flex gap-1">
+                <input
+                  type="text"
+                  value={projectPath}
+                  onChange={(e) => setProjectPath(e.target.value)}
+                  placeholder="Select project folder..."
+                  className="flex-1 bg-slate-900/80 border border-slate-800 px-2 py-1.5 text-[10px] text-slate-300 outline-none focus:border-cyan-500/50 rounded placeholder:text-slate-600"
                 />
-              </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const sel = await open({ directory: true, multiple: false });
+                      if (sel && typeof sel === 'string') setProjectPath(sel);
+                    } catch (err) {
+                      console.error(err);
+                    }
+                  }}
+                  className="px-3 bg-slate-800 hover:bg-slate-700 active:bg-slate-950 active:scale-95 text-slate-300 text-[10px] font-bold rounded border border-slate-700 hover:border-slate-600 transition-all"
+                  title="Browse Folder"
+                >
+                  ...
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const found: string[] = await invoke('scan_for_projects', { startPath: projectPath || "C:\\" });
+                      if (found.length === 0) {
+                        addLog("🔍 No Android projects found nearby.");
+                      } else if (found.length === 1) {
+                        setProjectPath(found[0]);
+                        addLog("✨ Auto-detected project!");
+                      } else {
+                        setScanResults(found);
+                        setShowScanResults(true);
+                        addLog(`🔍 Found ${found.length} projects.`);
+                      }
+                    } catch (err) {
+                      console.error(err);
+                    }
+                  }}
+                  className="px-3 bg-slate-800 hover:bg-slate-700 active:bg-slate-950 active:scale-95 text-slate-300 text-[10px] font-bold rounded border border-slate-700 hover:border-slate-600 transition-all"
+                  title="Auto-Detect Project Nearby"
+                >
+                  🪄
+                </button>
+              </div>
+
+              {/* Scan Results Dropdown */}
+              {showScanResults && scanResults.length > 0 && (
+                <div className="absolute z-50 mt-1 w-64 bg-slate-900 border border-slate-700 rounded-lg shadow-xl overflow-hidden">
+                  <div className="px-2 py-1 text-[9px] font-bold text-slate-500 bg-slate-950/50 border-b border-slate-800">select project</div>
+                  {scanResults.map((p, i) => (
+                    <button
+                      key={i}
+                      onClick={() => { setProjectPath(p); setShowScanResults(false); }}
+                      className="w-full text-left px-3 py-2 text-[10px] text-slate-300 hover:bg-cyan-900/20 hover:text-cyan-400 transition-colors truncate"
+                    >
+                      {p.split('\\').pop() || p} <span className="text-slate-600 ml-1 text-[9px]">({p})</span>
+                    </button>
+                  ))}
+                  <button onClick={() => setShowScanResults(false)} className="w-full text-center py-1 text-[9px] text-slate-500 hover:text-slate-300 border-t border-slate-800">cancel</button>
+                </div>
+              )}
             </div>
+
+            {/* Configuration Card (Type + Turbo) */}
+            <div className={`p-3 rounded-lg border transition-all duration-300 ${turboMode ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-900/40 border-slate-800'}`}>
+
+              {/* Build Type Row */}
+              <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-700/30">
+                <span className="text-[10px] font-bold text-slate-500 tracking-wider">BUILD TARGET</span>
+                <div className="flex bg-slate-900/80 border border-slate-800 rounded p-0.5">
+                  <button
+                    onClick={() => setBuildType('apk')}
+                    className={`px-3 py-1 text-[9px] font-black rounded transition-all ${buildType === 'apk' ? 'bg-cyan-500 text-black shadow-sm' : 'text-slate-500 hover:text-slate-400'}`}
+                  >
+                    APK
+                  </button>
+                  <button
+                    onClick={() => setBuildType('aab')}
+                    className={`px-3 py-1 text-[9px] font-black rounded transition-all ${buildType === 'aab' ? 'bg-cyan-500 text-black shadow-sm' : 'text-slate-500 hover:text-slate-400'}`}
+                  >
+                    AAB
+                  </button>
+                </div>
+              </div>
+
+              {/* Turbo Row */}
+              <div className="flex justify-between items-center">
+                <div>
+                  <div className={`text-xs font-bold tracking-wide transition-colors ${turboMode ? 'text-emerald-400' : 'text-slate-400'}`}>
+                    {turboMode ? '⚡ TURBO ACTIVE' : '🐢 TURBO OFF'}
+                  </div>
+                  <div className="text-[9px] text-slate-500 mt-0.5 font-medium">
+                    {hardware ? `${hardware.max_workers} workers • ${hardware.jvm_heap_gb}GB heap` : 'Auto-detecting...'}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setTurboMode(!turboMode)}
+                  style={{
+                    width: '32px',
+                    height: '16px',
+                    borderRadius: '8px',
+                    backgroundColor: turboMode ? '#10b981' : '#475569',
+                    position: 'relative',
+                    transition: 'all 0.3s',
+                    boxShadow: turboMode ? '0 0 8px rgba(16, 185, 129, 0.4)' : 'none',
+                    cursor: 'pointer',
+                    border: 'none',
+                    marginRight: '5px'
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '50%',
+                      backgroundColor: 'white',
+                      position: 'absolute',
+                      top: '3px',
+                      left: turboMode ? '19px' : '3px',
+                      transition: 'all 0.3s',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                    }}
+                  />
+                </button>
+              </div>
+            </div>
+
+            {/* Build Button */}
+            <button
+              onClick={isBuilding ? handleAbort : handleBuild}
+              className={`w-full py-3 text-xs font-black uppercase tracking-wider rounded-lg transition-all ${isBuilding
+                ? 'bg-red-600 hover:bg-red-500'
+                : 'bg-gradient-to-r from-cyan-500 to-emerald-500 text-black hover:from-cyan-400 hover:to-emerald-400 active:scale-[0.98]'
+                }`}
+            >
+              {isBuilding ? `🛑 ABORT ${formatTime(elapsedTime)} (${Math.round(buildProgress)}%)` : `🚀 IGNITE ${buildType.toUpperCase()} BUILD`}
+            </button>
+
+            {/* Open APK Folder Button */}
+            <button
+              onClick={handleOpenOutput}
+              disabled={isBuilding}
+              className={`w-full py-2.5 text-[10px] font-bold uppercase tracking-widest rounded-lg border transition-all ${buildProgress >= 100 && !isBuilding
+                ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400 hover:bg-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]'
+                : isBuilding
+                  ? 'bg-slate-900/50 border-slate-800 text-slate-700 cursor-not-allowed opacity-50'
+                  : 'bg-slate-900/50 border-slate-800 text-slate-500 hover:bg-slate-800'
+                }`}
+            >
+              📂 Open APK Folder
+            </button>
+
+            {/* Live Stats */}
+
+            <div className="flex gap-2 text-[9px]">
+              <div className="flex-1 p-2 bg-slate-900/50 rounded border border-slate-800/50 text-center">
+                <div className="text-slate-500">CPU</div>
+                <div className={`font-bold ${avgCpu > 80 ? 'text-orange-400' : 'text-cyan-400'}`}>{avgCpu}%</div>
+              </div>
+              <div className="flex-1 p-2 bg-slate-900/50 rounded border border-slate-800/50 text-center">
+                <div className="text-slate-500">RAM</div>
+                <div className={`font-bold ${memPercent > 80 ? 'text-orange-400' : 'text-cyan-400'}`}>{memPercent}%</div>
+              </div>
+            </div>
+
           </div>
 
-          {/* Build Button */}
-          <button
-            onClick={isBuilding ? handleAbort : handleBuild}
-            className={`w-full py-3 text-xs font-black uppercase tracking-wider rounded-lg transition-all ${isBuilding
-              ? 'bg-red-600 hover:bg-red-500'
-              : 'bg-gradient-to-r from-cyan-500 to-emerald-500 text-black hover:from-cyan-400 hover:to-emerald-400'
-              }`}
-          >
-            {isBuilding ? `🛑 ABORT ${formatTime(elapsedTime)} (${Math.round(buildProgress)}%)` : '🚀 IGNITE BUILD'}
-          </button>
-
-          {/* Open APK Folder Button */}
-          <button
-            onClick={handleOpenOutput}
-            disabled={isBuilding}
-            className={`w-full py-2.5 text-[10px] font-bold uppercase tracking-widest rounded-lg border transition-all ${buildProgress >= 100 && !isBuilding
-              ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400 hover:bg-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]'
-              : isBuilding
-                ? 'bg-slate-900/50 border-slate-800 text-slate-700 cursor-not-allowed opacity-50'
-                : 'bg-slate-900/50 border-slate-800 text-slate-500 hover:bg-slate-800'
-              }`}
-          >
-            📂 Open APK Folder
-          </button>
-
-          {/* Live Stats */}
-
-          <div className="flex gap-2 text-[9px]">
-            <div className="flex-1 p-2 bg-slate-900/50 rounded border border-slate-800/50 text-center">
-              <div className="text-slate-500">CPU</div>
-              <div className={`font-bold ${avgCpu > 80 ? 'text-orange-400' : 'text-cyan-400'}`}>{avgCpu}%</div>
-            </div>
-            <div className="flex-1 p-2 bg-slate-900/50 rounded border border-slate-800/50 text-center">
-              <div className="text-slate-500">RAM</div>
-              <div className={`font-bold ${memPercent > 80 ? 'text-orange-400' : 'text-cyan-400'}`}>{memPercent}%</div>
-            </div>
-          </div>
-
-          {/* Spacer */}
-          <div className="flex-1" />
-
-          {/* Maintenance Toggle */}
-          <div className="relative">
+          {/* Maintenance Toggle (Fixed Footer) */}
+          <div className="shrink-0 p-2 border-t border-slate-800/50 bg-[#08090d] z-20 relative">
             <button
               onClick={() => setShowMaintenance(!showMaintenance)}
               className="w-full py-2 text-[9px] font-medium uppercase tracking-wide text-slate-500 hover:text-slate-300 transition-colors"
@@ -387,12 +410,12 @@ export default function App() {
               ⚙️ Maintenance {showMaintenance ? '▲' : '▼'}
             </button>
             {showMaintenance && (
-              <div className="absolute bottom-full left-0 right-0 mb-1 p-2 bg-slate-900 border border-slate-800 rounded-lg space-y-1">
+              <div className="absolute bottom-full left-0 right-0 mx-2 mb-2 p-2 bg-slate-900 border border-slate-800 rounded-lg space-y-1 shadow-2xl z-30">
                 <button onClick={handleNuke} className="w-full py-1.5 text-[9px] font-semibold uppercase bg-red-900/30 text-red-400 rounded hover:bg-red-900/50 transition-colors">
                   🧨 Nuke Gradle Cache
                 </button>
                 <button onClick={handleClearArchive} className="w-full py-1.5 text-[9px] font-semibold uppercase bg-purple-900/30 text-purple-400 rounded hover:bg-purple-900/50 transition-colors">
-                  🗑️ Clear APK Archive
+                  🗑️ Clear Archive
                 </button>
                 <button onClick={handlePurge} className="w-full py-1.5 text-[9px] font-semibold uppercase bg-orange-900/30 text-orange-400 rounded hover:bg-orange-900/50 transition-colors">
                   🔥 Purge WSL
@@ -401,7 +424,7 @@ export default function App() {
                   📂 Open Logs Folder
                 </button>
                 <div className="mt-2 pt-2 border-t border-slate-700">
-                  <label className="text-[8px] text-slate-500 block mb-1">Custom APK Output Path:</label>
+                  <label className="text-[8px] text-slate-500 block mb-1">Custom Output Path:</label>
                   <div className="flex gap-1">
                     <input
                       type="text"

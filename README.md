@@ -3,7 +3,7 @@
 
 A sleek Tauri + React desktop app that supercharges your local Android builds by automatically detecting your hardware and configuring Gradle for maximum parallelism.
 
-![Version](https://img.shields.io/badge/version-1.3.5-cyan)
+![Version](https://img.shields.io/badge/version-1.3.7-cyan)
 ![Platform](https://img.shields.io/badge/platform-Windows-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -20,10 +20,11 @@ A sleek Tauri + React desktop app that supercharges your local Android builds by
 - **Fresh vs Cached Detection** – Know instantly if your APK was rebuilt or reused
 
 ### APK Management
-- **Managed APK Archive** – All builds saved to `hyperzenith_builds/` with timestamps
-- **Custom Output Path** – Set your own APK destination folder (persisted across sessions)
+- **AAB & APK Support** – Toggle between debug APKs and store-ready AAB bundles
+- **Managed Archive** – All builds saved to `hyperzenith_builds/` with timestamps
+- **Custom Output Path** – Set your own APK/AAB destination folder (persisted)
 - **Open APK Folder** – One-click access to your archived builds
-- **Clear Archive** – Quickly delete old APKs
+- **Clear Archive** – Quickly delete old APKs and AABs
 
 ### Maintenance Tools
 - **Nuke Gradle Cache** – Force-clear corrupted build directories (`android/app/build`, `.gradle`)
@@ -34,6 +35,7 @@ A sleek Tauri + React desktop app that supercharges your local Android builds by
 - **Sleek Cyberpunk Design** – Dark theme with neon accents
 - **Live CPU/RAM Stats** – Real-time system monitoring
 - **Project Auto-Detection** – Scans common directories for React Native/Expo projects
+- **Silent Production Builds** – No more popping terminal windows in release mode
 - **Turbo Toggle** – Precise, tactile toggle switch
 
 ## 🚀 Getting Started

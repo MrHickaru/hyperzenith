@@ -1,6 +1,36 @@
 # Changelog
 
+## [1.4.0] - 2026-01-18
+
+### Added
+- **Archive Management**:
+    - "Clear Archive" button to delete old builds.
+    - Custom Output Path selection with persistence.
+    - "Nuke Build" renamed to "Nuke Gradle Cache" for clarity.
+- **Window Size**: Adjusted default window size to 900x600 for better usability.
+
+### Changed
+- **UI/UX**: Refined sidebar spacing and layout.
+- **Maintenance**: Added separate "Maintenance" toggle for risky operations.
+
+### Fixed
+- Stabilized local build env path resolution.
+
+
 All notable changes to HyperZenith are documented here.
+
+## [1.3.7] - 2026-01-18
+
+### Added
+- **AAB Support**: New toggle to switch between APK (`assembleDebug`) and AAB (`bundleDebug`) builds.
+- **Improved UI**: Build buttons now explicitly state the build type (e.g., "IGNITE AAB BUILD").
+- **Backend Polish**: Added `CREATE_NO_WINDOW` flag to silence popping terminal windows in production.
+
+### Fixed
+- **Maintenance Layout**: Fixed an issue where the Maintenance menu caused the sidebar layout to double in height in some views. 
+- **Clipping Bug**: Maintenance menu popup is now properly visible in production builds.
+
+---
 
 ## [1.3.6] - 2026-01-17
 
