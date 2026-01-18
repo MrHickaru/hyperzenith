@@ -121,6 +121,9 @@ export default function App() {
       setBuildProgress(100);
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       addLog(`✅ BUILD COMPLETE in ${elapsed}s!`);
+      if (turboMode) {
+        addLog(`⚡ Direct Engine mode (~3x faster than standard)`);
+      }
 
     } catch (err) {
       addLog(`❌ ${err}`);
@@ -225,10 +228,10 @@ export default function App() {
       </div>
 
       {/* Main */}
-      <div className="flex-1 flex min-h-0">
+      <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Left Panel */}
-        <aside className="w-40 shrink-0 border-r border-slate-800/30 flex flex-col bg-[#08090d]">
-          <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-3 custom-scrollbar">
+        <aside className="w-40 shrink-0 border-r border-slate-800/30 flex flex-col bg-[#08090d] min-h-0">
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2 space-y-3 custom-scrollbar">
             {/* Project */}
             <div>
               <label className="text-[9px] font-bold uppercase tracking-widest text-slate-600 block mb-1">Project</label>
@@ -321,12 +324,20 @@ export default function App() {
 
               {/* Turbo Row */}
               <div className="flex justify-between items-center">
-                <div>
-                  <div className={`text-xs font-bold tracking-wide transition-colors ${turboMode ? 'text-emerald-400' : 'text-slate-400'}`}>
-                    {turboMode ? '⚡ TURBO ACTIVE' : '🐢 TURBO OFF'}
+                <div className="flex flex-col">
+                  <div className={`flex items-center text-xs font-bold tracking-wide transition-colors ${turboMode ? 'text-orange-400' : 'text-cyan-400'}`}>
+                    <div style={{ width: '22px' }} className="flex-none flex justify-center mr-1">
+                      {turboMode ? '🔥' : '🧊'}
+                    </div>
+                    <span>{turboMode ? 'DIRECT ENGINE' : 'STABLE MODE'}</span>
                   </div>
-                  <div className="text-[9px] text-slate-500 mt-0.5 font-medium">
-                    {hardware ? `${hardware.max_workers} workers • ${hardware.jvm_heap_gb}GB heap` : 'Auto-detecting...'}
+                  <div className="flex items-center">
+                    <div style={{ width: '22px' }} className="flex-none mr-1" />
+                    <span className="text-[9px] text-slate-500 font-medium">
+                      {turboMode
+                        ? `${hardware?.max_workers || 8} cores • ${hardware?.jvm_heap_gb || 4}GB reserved`
+                        : 'Standard EAS Build'}
+                    </span>
                   </div>
                 </div>
                 <button
@@ -359,6 +370,33 @@ export default function App() {
                   />
                 </button>
               </div>
+            </div>
+
+            {/* Trade-Off Micro-List */}
+            <div className="p-2 bg-slate-900/50 rounded-lg text-[9px] border border-slate-800/50">
+              {turboMode ? (
+                <div className="space-y-1 mt-1">
+                  <div className="flex items-center text-orange-400">
+                    <div style={{ width: '22px' }} className="flex-none flex justify-center items-center">⚡</div>
+                    <div className="ml-2">Config Cache + Parallel</div>
+                  </div>
+                  <div className="flex items-center text-red-400/70">
+                    <div style={{ width: '22px' }} className="flex-none flex justify-center items-center">✕</div>
+                    <div className="ml-2">Lint & Tests Skipped</div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1 mt-1">
+                  <div className="flex items-center text-emerald-400">
+                    <div style={{ width: '22px' }} className="flex-none flex justify-center items-center">✓</div>
+                    <div className="ml-2">Full Lint & Tests</div>
+                  </div>
+                  <div className="flex items-center text-cyan-400">
+                    <div style={{ width: '22px' }} className="flex-none flex justify-center items-center">✓</div>
+                    <div className="ml-2">Low System Impact</div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Build Button */}
@@ -450,14 +488,14 @@ export default function App() {
         </aside>
 
         {/* Console */}
-        <section className="flex-1 flex flex-col bg-[#050506] min-w-0">
+        <section className="flex-1 flex flex-col bg-[#050506] min-w-0 min-h-0 overflow-hidden">
           <div className="shrink-0 px-4 py-2 border-b border-slate-800/30 flex justify-between items-center">
             <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">Console</span>
             <span className={`text-[9px] ${isBuilding ? 'text-emerald-400 animate-pulse' : 'text-slate-700'}`}>
               {isBuilding ? '● BUILDING' : '○ IDLE'}
             </span>
           </div>
-          <div className="flex-1 p-4 overflow-y-auto text-[10px] leading-relaxed font-mono">
+          <div className="flex-1 min-h-0 p-4 overflow-y-auto text-[10px] leading-relaxed font-mono custom-scrollbar">
             {logs.map((log, i) => (
               <div
                 key={i}
