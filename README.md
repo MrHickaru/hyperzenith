@@ -9,9 +9,12 @@ A sleek Tauri + React desktop app that supercharges your local Android builds by
 
 ## 🖥️ Screenshot
 
+<<<<<<< HEAD
 ![HyperZenith Main](screenshot_v1.4.3_main.png)
 ![HyperZenith Settings](screenshot_v1.4.3_settings.png)
 
+=======
+>>>>>>> 744dc8e6c4338259ea2d7a3f8e492357aa013355
 ## ✨ Features
 
 ### Build Performance
