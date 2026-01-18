@@ -78,7 +78,8 @@ pub fn sync_files(local_path: &str, config: &MacConfig, remote_path: &str) -> Re
     let output = Command::new("wsl")
         .args(&[
             "rsync",
-            "-avz", 
+            "-avz",
+            "-e", "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null",
             "--exclude", "node_modules", 
             "--exclude", ".git", 
             "--exclude", "android",
