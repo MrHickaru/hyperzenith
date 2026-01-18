@@ -3,7 +3,7 @@
 
 A sleek Tauri desktop app that supercharges your local Android builds and remote-controls your Mac for high-speed iOS builds. HyperZenith manages the "compilation chaos" so you don't have to.
 
-![Version](https://img.shields.io/badge/version-1.4.4-cyan)
+![Version](https://img.shields.io/badge/version-1.4.6-cyan)
 ![Platform](https://img.shields.io/badge/platform-Windows-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -23,9 +23,11 @@ A sleek Tauri desktop app that supercharges your local Android builds and remote
 ### 🍎 iOS: Satellite Mode (Experimental)
 > **Build iOS apps from Windows via a remote Mac.**
 - **Headless Remote Control** – No VNC/TeamViewer lag. Send build commands over SSH.
-- **Auto-Sync** – Mirrors your local Windows project to the Mac via `rsync` before every build.
-- **Turbo Xcode** – Runs `xcodebuild` with stripped variables (no indexing, no UI) for maximum speed.
-- **MacinCloud Ready** – Supports custom SSH ports (IP:PORT) and auto-bypasses strict host checking.
+- **MacinCloud Ready** – Full support for **2FA / SSH Keys** (`-i`) and non-standard ports.
+- **Resilient Engine** – Uses `npm ci --prefer-offline` + `pod install` checks to prevent sync errors on shaky connections.
+- **Smart Sync** – Excludes `Pods/` and build artifacts to save bandwidth optimize transfer speeds.
+- **Auto-Sync** – Mirrors your local Windows project to the Mac before every build.
+- **Pre-Flight Checks** – Auto-detects environment issues (missing Xcode, bad paths) before building.
 
 ### ☢️ Nuclear Recovery Tools
 > **"Have you tried turning it off and on again?" — but for compilers.**

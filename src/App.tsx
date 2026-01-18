@@ -41,7 +41,7 @@ export default function App() {
   const [platform, setPlatform] = useState<'android' | 'ios'>('android');
   const [macConfig, setMacConfig] = useState(() => {
     const saved = localStorage.getItem('hyperzenith_mac_config');
-    return saved ? JSON.parse(saved) : { ip: '', username: '', password: '' };
+    return saved ? JSON.parse(saved) : { ip: '', username: '', password: '', sshKeyPath: '' };
   });
   const [iosRemotePath, setIosRemotePath] = useState(() => localStorage.getItem('hyperzenith_ios_remote_path') || '~/hyperzenith_builds/project');
   const [iosScheme, setIosScheme] = useState(() => localStorage.getItem('hyperzenith_ios_scheme') || 'App');
@@ -262,7 +262,7 @@ export default function App() {
           <h1 className="text-lg font-black tracking-tight">
             HYPER<span className="text-cyan-400">ZENITH</span>
           </h1>
-          <span className="text-[9px] font-medium px-1.5 py-0.5 bg-cyan-500/20 text-cyan-400 rounded">V1.4.3</span>
+          <span className="text-[9px] font-medium px-1.5 py-0.5 bg-cyan-500/20 text-cyan-400 rounded">V1.4.6</span>
         </div>
         <div className="flex items-center gap-5 text-[11px]">
           {hardware && (
@@ -512,7 +512,14 @@ export default function App() {
                     <input type="password" value={macConfig.password} onChange={e => {
                       const c = { ...macConfig, password: e.target.value };
                       setMacConfig(c); localStorage.setItem('hyperzenith_mac_config', JSON.stringify(c));
-                    }} placeholder="Password" className="w-full bg-slate-900 border border-slate-700 px-1.5 py-1 text-[9px] rounded outline-none focus:border-cyan-500/50 text-cyan-100" />
+                    }} placeholder="Password (or leave empty if using key)" className="w-full bg-slate-900 border border-slate-700 px-1.5 py-1 text-[9px] rounded outline-none focus:border-cyan-500/50 text-cyan-100" />
+                    <div className="space-y-0.5">
+                      <input type="text" value={macConfig.sshKeyPath || ''} onChange={e => {
+                        const c = { ...macConfig, sshKeyPath: e.target.value };
+                        setMacConfig(c); localStorage.setItem('hyperzenith_mac_config', JSON.stringify(c));
+                      }} placeholder="SSH Key Path (e.g., ~/.ssh/id_rsa)" className="w-full bg-slate-900 border border-slate-700 px-1.5 py-1 text-[9px] rounded outline-none focus:border-cyan-500/50 text-cyan-100" />
+                      <span className="text-[7px] text-slate-600 block">For MacinCloud 2FA or key-only auth</span>
+                    </div>
                     <div className="grid grid-cols-3 gap-1">
                       <input type="text" value={iosScheme} onChange={e => {
                         setIosScheme(e.target.value); localStorage.setItem('hyperzenith_ios_scheme', e.target.value);
