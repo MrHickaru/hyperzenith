@@ -15,10 +15,27 @@ pub struct MacConfig {
     pub password: Option<String>,
 }
 
+/// Helper to parse IP:PORT from the ip field. Defaults to port 22.
+fn parse_ip_and_port(input: &str) -> (&str, &str) {
+    if let Some((ip, port)) = input.split_once(':') {
+        (ip, port)
+    } else {
+        (input, "22")
+    }
+}
+
 /// Helper to establish SSH connection
 fn create_session(config: &MacConfig) -> Result<Session, String> {
-    let tcp = TcpStream::connect(format!("{}:22", config.ip))
-        .map_err(|e| format!("Failed to connect to Mac: {}", e))?;
+    let (ip, port) = parse_ip_and_port(&config.ip);
+    
+    // Set connection timeout for cloud connections
+    let addr = format!("{}:{}", ip, port);
+    let tcp = TcpStream::connect(&addr)
+        .map_err(|e| format!("Failed to connect to Mac at {} - {}", addr, e))?;
+    
+    // Set read/write timeout to prevent hanging
+    tcp.set_read_timeout(Some(std::time::Duration::from_secs(120))).ok();
+    tcp.set_write_timeout(Some(std::time::Duration::from_secs(120))).ok();
     
     let mut sess = Session::new().unwrap();
     sess.set_tcp_stream(tcp);
@@ -75,15 +92,25 @@ fn run_remote_command(
 
 /// Synchronize files using rsync (Expects rsync in Windows PATH)
 pub fn sync_files(local_path: &str, config: &MacConfig, remote_path: &str) -> Result<(), String> {
+    let (ip, port) = parse_ip_and_port(&config.ip);
+    
+    // SSH options with timeout for cloud connections
+    let ssh_opts = format!(
+        "ssh -p {} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=30",
+        port
+    );
+
     let output = Command::new("wsl")
         .args(&[
             "rsync",
-            "-avz", 
+            "-avz",
+            "--timeout=120",  // Fail if transfer stalls for 2 minutes
+            "-e", &ssh_opts,
             "--exclude", "node_modules", 
             "--exclude", ".git", 
             "--exclude", "android",
             local_path, 
-            &format!("{}@{}:{}", config.username, config.ip, remote_path)
+            &format!("{}@{}:{}", config.username, ip, remote_path)
         ])
         .output()
         .map_err(|e| format!("Rsync (via WSL) failed: {}", e))?;
