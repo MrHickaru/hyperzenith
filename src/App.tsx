@@ -27,7 +27,7 @@ export default function App() {
   const [engineStatus, setEngineStatus] = useState("Select Project");
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [hardware, setHardware] = useState<HardwareProfile | null>(null);
-  const [logs, setLogs] = useState<string[]>(["🚀 HyperZenith V1.3.6"]);
+  const [logs, setLogs] = useState<string[]>(["🚀 HyperZenith V1.4.3"]);
   const [buildProgress, setBuildProgress] = useState(0);
   const [buildStartTime, setBuildStartTime] = useState<number | null>(null);
   const [showMaintenance, setShowMaintenance] = useState(false);
@@ -262,7 +262,7 @@ export default function App() {
           <h1 className="text-lg font-black tracking-tight">
             HYPER<span className="text-cyan-400">ZENITH</span>
           </h1>
-          <span className="text-[9px] font-medium px-1.5 py-0.5 bg-cyan-500/20 text-cyan-400 rounded">V1.3.6</span>
+          <span className="text-[9px] font-medium px-1.5 py-0.5 bg-cyan-500/20 text-cyan-400 rounded">V1.4.3</span>
         </div>
         <div className="flex items-center gap-5 text-[11px]">
           {hardware && (
@@ -498,26 +498,30 @@ export default function App() {
                   <button onClick={() => setShowIosSettings(!showIosSettings)} className="text-cyan-400 p-1 hover:bg-cyan-400/20 rounded">⚙️</button>
                 </div>
                 {showIosSettings ? (
-                  <div className="space-y-1 mt-1">
-                    <input type="text" value={macConfig.ip} onChange={e => {
-                      const c = { ...macConfig, ip: e.target.value };
-                      setMacConfig(c); localStorage.setItem('hyperzenith_mac_config', JSON.stringify(c));
-                    }} placeholder="Mac IP (e.g. 192.168.1.15)" className="w-full bg-slate-950 border border-slate-800 px-2 py-1 text-[9px] rounded outline-none focus:border-cyan-500/50" />
-                    <input type="text" value={macConfig.username} onChange={e => {
-                      const c = { ...macConfig, username: e.target.value };
-                      setMacConfig(c); localStorage.setItem('hyperzenith_mac_config', JSON.stringify(c));
-                    }} placeholder="Username" className="w-full bg-slate-950 border border-slate-800 px-2 py-1 text-[9px] rounded outline-none focus:border-cyan-500/50" />
+                  <div className="space-y-1.5 mt-1">
+                    <div className="grid grid-cols-2 gap-1">
+                      <input type="text" value={macConfig.ip} onChange={e => {
+                        const c = { ...macConfig, ip: e.target.value };
+                        setMacConfig(c); localStorage.setItem('hyperzenith_mac_config', JSON.stringify(c));
+                      }} placeholder="IP" className="bg-slate-900 border border-slate-700 px-1.5 py-1 text-[9px] rounded outline-none focus:border-cyan-500/50 text-cyan-100" />
+                      <input type="text" value={macConfig.username} onChange={e => {
+                        const c = { ...macConfig, username: e.target.value };
+                        setMacConfig(c); localStorage.setItem('hyperzenith_mac_config', JSON.stringify(c));
+                      }} placeholder="User" className="bg-slate-900 border border-slate-700 px-1.5 py-1 text-[9px] rounded outline-none focus:border-cyan-500/50 text-cyan-100" />
+                    </div>
                     <input type="password" value={macConfig.password} onChange={e => {
                       const c = { ...macConfig, password: e.target.value };
                       setMacConfig(c); localStorage.setItem('hyperzenith_mac_config', JSON.stringify(c));
-                    }} placeholder="Password" className="w-full bg-slate-950 border border-slate-800 px-2 py-1 text-[9px] rounded outline-none focus:border-cyan-500/50" />
-                    <input type="text" value={iosRemotePath} onChange={e => {
-                      setIosRemotePath(e.target.value); localStorage.setItem('hyperzenith_ios_remote_path', e.target.value);
-                    }} placeholder="Remote Project Path" className="w-full bg-slate-950 border border-slate-800 px-2 py-1 text-[9px] rounded outline-none focus:border-cyan-500/50" />
-                    <input type="text" value={iosScheme} onChange={e => {
-                      setIosScheme(e.target.value); localStorage.setItem('hyperzenith_ios_scheme', e.target.value);
-                    }} placeholder="Scheme" className="w-full bg-slate-950 border border-slate-800 px-2 py-1 text-[9px] rounded outline-none focus:border-cyan-500/50" />
-                    <button onClick={() => setShowIosSettings(false)} className="w-full py-1 mt-1 bg-cyan-500 text-black text-[8px] font-bold rounded">SAVE CONFIG</button>
+                    }} placeholder="Password" className="w-full bg-slate-900 border border-slate-700 px-1.5 py-1 text-[9px] rounded outline-none focus:border-cyan-500/50 text-cyan-100" />
+                    <div className="grid grid-cols-3 gap-1">
+                      <input type="text" value={iosScheme} onChange={e => {
+                        setIosScheme(e.target.value); localStorage.setItem('hyperzenith_ios_scheme', e.target.value);
+                      }} placeholder="Scheme" className="bg-slate-900 border border-slate-700 px-1.5 py-1 text-[9px] rounded outline-none focus:border-cyan-500/50 text-cyan-100" />
+                      <input type="text" value={iosRemotePath} onChange={e => {
+                        setIosRemotePath(e.target.value); localStorage.setItem('hyperzenith_ios_remote_path', e.target.value);
+                      }} placeholder="Path" className="col-span-2 bg-slate-900 border border-slate-700 px-1.5 py-1 text-[9px] rounded outline-none focus:border-cyan-500/50 text-cyan-100" />
+                    </div>
+                    <button onClick={() => setShowIosSettings(false)} className="w-full py-1 bg-cyan-500 text-black text-[8px] font-bold rounded">SAVE</button>
                   </div>
                 ) : (
                   <div className="text-[9px] text-slate-400">
