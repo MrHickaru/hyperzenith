@@ -15,20 +15,10 @@ pub struct MacConfig {
     pub password: Option<String>,
 }
 
-/// Helper to parse IP:PORT from the ip field. Defaults to port 22.
-fn parse_ip_and_port(input: &str) -> (&str, &str) {
-    if let Some((ip, port)) = input.split_once(':') {
-        (ip, port)
-    } else {
-        (input, "22")
-    }
-}
-
 /// Helper to establish SSH connection
 fn create_session(config: &MacConfig) -> Result<Session, String> {
-    let (ip, port) = parse_ip_and_port(&config.ip);
-    let tcp = TcpStream::connect(format!("{}:{}", ip, port))
-        .map_err(|e| format!("Failed to connect to Mac at {}:{} - {}", ip, port, e))?;
+    let tcp = TcpStream::connect(format!("{}:22", config.ip))
+        .map_err(|e| format!("Failed to connect to Mac: {}", e))?;
     
     let mut sess = Session::new().unwrap();
     sess.set_tcp_stream(tcp);
@@ -85,24 +75,15 @@ fn run_remote_command(
 
 /// Synchronize files using rsync (Expects rsync in Windows PATH)
 pub fn sync_files(local_path: &str, config: &MacConfig, remote_path: &str) -> Result<(), String> {
-    let (ip, port) = parse_ip_and_port(&config.ip);
-    
-    // Construct SSH options with custom port and host key bypass
-    let ssh_opts = format!(
-        "ssh -p {} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null",
-        port
-    );
-
     let output = Command::new("wsl")
         .args(&[
             "rsync",
-            "-avz",
-            "-e", &ssh_opts,
+            "-avz", 
             "--exclude", "node_modules", 
             "--exclude", ".git", 
             "--exclude", "android",
             local_path, 
-            &format!("{}@{}:{}", config.username, ip, remote_path)
+            &format!("{}@{}:{}", config.username, config.ip, remote_path)
         ])
         .output()
         .map_err(|e| format!("Rsync (via WSL) failed: {}", e))?;
