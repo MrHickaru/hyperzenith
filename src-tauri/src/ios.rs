@@ -3,9 +3,7 @@ use std::io::Read;
 use std::net::TcpStream;
 use std::process::Command;
 use tauri::Emitter;
-use std::fs::OpenOptions;
 use std::sync::{Arc, Mutex};
-use std::io::Write;
 use chrono::Local;
 
 #[derive(serde::Deserialize, Clone)]
